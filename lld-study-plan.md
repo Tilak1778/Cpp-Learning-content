@@ -15,10 +15,10 @@
 |-----|-------|-------|-------|
 | [**D1 Mon**](days/day01-move-semantics-rule-of-5.md) | Move semantics & Rule of 5 | Lvalue vs rvalue, `std::move`, copy/move constructors, when compiler generates what | Write a `String` class with proper copy/move semantics, verify with print statements in each special member |
 | [**D2 Tue**](days/day02-unique-ptr.md) | `unique_ptr` deep dive | Ownership transfer, custom deleters, `make_unique`, array specialization | Implement `UniquePtr<T>` from scratch with custom deleter support |
-| **D3 Wed** | `shared_ptr` deep dive | Control block layout, ref counting, weak references, aliasing constructor | Implement `SharedPtr<T>` + `WeakPtr<T>` with a shared control block |
-| **D4 Thu** | Review & refine | Re-read your D2-D3 code, add edge cases, test with sanitizers | Add thread-safe ref counting to your `SharedPtr` using `std::atomic` |
-| **D5 Fri** | RAII pattern | Scope guards, file handle wrappers, lock guards | Build a `ScopeGuard` class and an RAII `FileHandle` wrapper |
-| **D6 Sat** | Copy-on-write & Pimpl | COW strings, Pimpl for ABI stability, compilation firewall | Implement a **COW string** and a **Pimpl-wrapped** `HttpClient` class |
+| [**D3 Wed**](days/day03-shared-ptr.md) | `shared_ptr` deep dive | Control block layout, ref counting, weak references, aliasing constructor | Implement `SharedPtr<T>` + `WeakPtr<T>` with a shared control block |
+| [**D4 Thu**](days/day04-review-atomic-refcount.md) | Review & refine | Re-read your D2-D3 code, add edge cases, test with sanitizers | Add thread-safe ref counting to your `SharedPtr` using `std::atomic` |
+| [**D5 Fri**](days/day05-raii-scope-guard.md) | RAII pattern | Scope guards, file handle wrappers, lock guards | Build a `ScopeGuard` class and an RAII `FileHandle` wrapper |
+| [**D6 Sat**](days/day06-cow-pimpl.md) | Copy-on-write & Pimpl | COW strings, Pimpl for ABI stability, compilation firewall | Implement a **COW string** and a **Pimpl-wrapped** `DatabaseClient` class |
 | **D7 Sun** | **Weekly review** | Revisit all code, write short notes on each pattern's trade-offs | Refactor any messy code, ensure all builds with `-Wall -Wextra -fsanitize=address` |
 
 **Key Deep-Dives:**
