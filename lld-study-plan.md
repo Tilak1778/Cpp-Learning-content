@@ -32,7 +32,7 @@
 
 | Day | Topic | Learn | Build |
 |-----|-------|-------|-------|
-| **D8 Mon** | How `new`/`delete` work | `operator new` vs `malloc`, alignment (`alignas`, `alignof`), placement new | Override global `operator new`/`delete` to track allocations, log sizes |
+| [**D8 Mon**](days/day08-new-delete-placement-new.md) | How `new`/`delete` work | `operator new` vs `malloc`, alignment (`alignas`, `alignof`), placement new | Override global `operator new`/`delete` to track allocations, log sizes |
 | **D9 Tue** | Arena (Bump) allocator | Linear allocation, bulk reset, no individual free, great for frame-based work | Implement an **Arena Allocator** — allocate from a contiguous buffer, `reset()` frees everything |
 | **D10 Wed** | Pool allocator | Fixed-size blocks, free list (intrusive linked list inside free blocks) | Implement a **Fixed-Size Pool Allocator**, benchmark vs `new`/`delete` in a loop |
 | **D11 Thu** | STL allocator interface | `std::allocator_traits`, making your allocator work with `std::vector` | Make your pool allocator compatible with STL containers |
@@ -224,3 +224,9 @@ Rate yourself after each week:
 - [ ] Week 6: System Design Problems (Part 1)
 - [ ] Week 7: System Design Problems (Part 2) + IPC/Networking
 - [ ] Week 8: Advanced C++ Idioms + Mock Interviews
+
+---
+
+## Supplementary Material
+
+- [**OS Concepts Appendix**](os-appendix/README.md) — Virtual Memory, Process Model, Signals, Context Switching, mmap, Dynamic Linking, File Systems, IPC. Study 15-20 min/day alongside the main plan.
