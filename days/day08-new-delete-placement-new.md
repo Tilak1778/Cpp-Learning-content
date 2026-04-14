@@ -902,5 +902,325 @@ This is why `delete` (without `[]`) on an array is UB — it doesn't read the co
 8. "Can you override `operator new` for a single class? How?"
 
 ---
+---
+
+# PART 7: REFERENCE SOLUTION — ALLOCATION TRACKER
+
+---
+---
+
+<br>
+
+<h2 style="color: #2980B9;">📘 8.16 Complete Implementation</h2>
+
+<br>
+
+#### `alloc_tracker.h`
+
+```cpp
+#pragma once
+#include <cstddef>
+#include <cstdio>
+
+struct AllocRecord {
+    void* address;
+    std::size_t size;
+    bool active;       // true = allocated, false = freed
+};
+
+class AllocTracker {
+public:
+    static AllocTracker& instance();
+
+    void record_alloc(void* ptr, std::size_t size);
+    void record_dealloc(void* ptr);
+    void print_stats() const;
+    void print_leaks() const;
+
+private:
+    AllocTracker() = default;
+
+    static constexpr std::size_t MAX_RECORDS = 10000;
+    AllocRecord m_records[MAX_RECORDS] = {};
+    std::size_t m_count = 0;
+
+    std::size_t m_total_allocs = 0;
+    std::size_t m_total_deallocs = 0;
+    std::size_t m_total_bytes_allocated = 0;
+    std::size_t m_current_bytes = 0;
+    std::size_t m_peak_bytes = 0;
+
+    // Linear search — simple and avoids needing a hash map (which would call new)
+    AllocRecord* find_record(void* ptr);
+};
+```
+
+<br>
+
+#### `alloc_tracker.cpp`
+
+```cpp
+#include "alloc_tracker.h"
+#include <cstdlib>
+#include <new>
+
+// ──────────────────────────────────────────
+// Singleton — uses a local static to avoid
+// constructor ordering issues with globals
+// ──────────────────────────────────────────
+AllocTracker& AllocTracker::instance() {
+    static AllocTracker tracker;
+    return tracker;
+}
+
+// ──────────────────────────────────────────
+// find_record: linear scan for a matching
+// active record. O(n) but avoids containers
+// that would call operator new themselves.
+// ──────────────────────────────────────────
+AllocRecord* AllocTracker::find_record(void* ptr) {
+    for (std::size_t i = 0; i < m_count; ++i) {
+        if (m_records[i].address == ptr && m_records[i].active) {
+            return &m_records[i];
+        }
+    }
+    return nullptr;
+}
+
+void AllocTracker::record_alloc(void* ptr, std::size_t size) {
+    m_total_allocs++;
+    m_total_bytes_allocated += size;
+    m_current_bytes += size;
+    if (m_current_bytes > m_peak_bytes) {
+        m_peak_bytes = m_current_bytes;
+    }
+
+    if (m_count < MAX_RECORDS) {
+        m_records[m_count++] = { ptr, size, true };
+    } else {
+        // Try to reuse a freed slot
+        for (std::size_t i = 0; i < MAX_RECORDS; ++i) {
+            if (!m_records[i].active) {
+                m_records[i] = { ptr, size, true };
+                return;
+            }
+        }
+        std::fprintf(stderr, "[AllocTracker] WARNING: record table full!\n");
+    }
+}
+
+void AllocTracker::record_dealloc(void* ptr) {
+    AllocRecord* rec = find_record(ptr);
+    if (rec) {
+        m_total_deallocs++;
+        m_current_bytes -= rec->size;
+        rec->active = false;
+    } else {
+        std::fprintf(stderr,
+            "[AllocTracker] WARNING: delete on unknown pointer %p "
+            "(double-free or untracked alloc)\n", ptr);
+    }
+}
+
+void AllocTracker::print_stats() const {
+    std::printf("\n========== Allocation Stats ==========\n");
+    std::printf("  Total allocations:    %zu\n", m_total_allocs);
+    std::printf("  Total deallocations:  %zu\n", m_total_deallocs);
+    std::printf("  Total bytes alloc'd:  %zu\n", m_total_bytes_allocated);
+    std::printf("  Current bytes in use: %zu\n", m_current_bytes);
+    std::printf("  Peak bytes in use:    %zu\n", m_peak_bytes);
+
+    if (m_total_allocs != m_total_deallocs) {
+        std::printf("  *** POSSIBLE LEAK: %zu alloc(s) without matching free ***\n",
+                    m_total_allocs - m_total_deallocs);
+    } else {
+        std::printf("  No leaks detected.\n");
+    }
+    std::printf("======================================\n\n");
+}
+
+void AllocTracker::print_leaks() const {
+    bool found = false;
+    for (std::size_t i = 0; i < m_count; ++i) {
+        if (m_records[i].active) {
+            if (!found) {
+                std::printf("========== Leaked Allocations ==========\n");
+                found = true;
+            }
+            std::printf("  LEAK: %zu bytes at %p\n",
+                        m_records[i].size, m_records[i].address);
+        }
+    }
+    if (!found) {
+        std::printf("========== No Leaks ==========\n");
+    } else {
+        std::printf("========================================\n");
+    }
+}
+```
+
+<br>
+
+#### `alloc_overrides.cpp`
+
+```cpp
+#include "alloc_tracker.h"
+#include <cstdlib>
+#include <new>
+
+void* operator new(std::size_t size) {
+    void* ptr = std::malloc(size);
+    if (!ptr) throw std::bad_alloc();
+    AllocTracker::instance().record_alloc(ptr, size);
+    return ptr;
+}
+
+void operator delete(void* ptr) noexcept {
+    if (!ptr) return;
+    AllocTracker::instance().record_dealloc(ptr);
+    std::free(ptr);
+}
+
+void operator delete(void* ptr, std::size_t) noexcept {
+    operator delete(ptr);
+}
+
+void* operator new[](std::size_t size) {
+    void* ptr = std::malloc(size);
+    if (!ptr) throw std::bad_alloc();
+    AllocTracker::instance().record_alloc(ptr, size);
+    return ptr;
+}
+
+void operator delete[](void* ptr) noexcept {
+    if (!ptr) return;
+    AllocTracker::instance().record_dealloc(ptr);
+    std::free(ptr);
+}
+
+void operator delete[](void* ptr, std::size_t) noexcept {
+    operator delete[](ptr);
+}
+```
+
+<br>
+
+#### `main.cpp`
+
+```cpp
+#include "alloc_tracker.h"
+#include <string>
+#include <vector>
+
+int main() {
+    // Single object
+    int* a = new int(42);
+    double* b = new double(3.14);
+    delete a;
+    delete b;
+
+    // Array
+    int* arr = new int[100];
+    delete[] arr;
+
+    // std::string (may allocate internally for long strings)
+    {
+        std::string s = "this is a long string that forces heap allocation";
+    }
+
+    // std::vector
+    {
+        std::vector<int> v(1000);
+    }
+
+    // Intentional leak
+    int* leak = new int[50];
+    // not deleted!
+
+    AllocTracker::instance().print_stats();
+    AllocTracker::instance().print_leaks();
+
+    return 0;
+}
+```
+
+```bash
+# Build:
+g++ -std=c++17 -Wall -Wextra -o tracker alloc_overrides.cpp main.cpp
+
+# Run:
+./tracker
+```
+
+<br>
+
+#### Expected output (sizes vary by platform/STL):
+
+```
+========== Allocation Stats ==========
+  Total allocations:    6
+  Total deallocations:  5
+  Total bytes alloc'd:  4312
+  Current bytes in use: 200
+  Peak bytes in use:    4312
+  *** POSSIBLE LEAK: 1 alloc(s) without matching free ***
+======================================
+
+========== Leaked Allocations ==========
+  LEAK: 200 bytes at 0x600002a04080
+========================================
+```
+
+<br>
+
+<h2 style="color: #2980B9;">📘 8.17 Key Design Decisions Explained</h2>
+
+<br>
+
+#### Why `static AllocTracker tracker` (Meyer's singleton) instead of a global?
+
+```cpp
+// Your approach:
+static AllocTracker g_allocTracker;  // global
+
+// Problem: the global constructor runs at program startup,
+// but operator new might be called BEFORE global constructors run
+// (e.g., by other globals' constructors).
+// → g_allocTracker might not be initialized yet → undefined behavior.
+
+// Solution: Meyer's singleton
+AllocTracker& AllocTracker::instance() {
+    static AllocTracker tracker;  // initialized on first call — guaranteed safe
+    return tracker;
+}
+```
+
+<br>
+
+#### Why a fixed-size array instead of `std::vector` or `std::map`?
+
+```
+operator new called
+  → AllocTracker::record_alloc()
+    → push_back to std::vector
+      → vector needs more capacity
+        → calls operator new        ← INFINITE RECURSION!
+```
+
+The tracker's internal storage must NEVER call `operator new`. A fixed-size `AllocRecord[]` array lives inside the object itself (stack or static storage) — no heap needed.
+
+<br>
+
+#### Why linear search in `find_record`?
+
+A hash map would be faster (O(1) vs O(n)), but `std::unordered_map` calls `operator new`. You could build a custom hash map using `mmap` or pre-allocated memory, but for a learning exercise, linear search is correct and simple. Real leak detectors (ASan, Valgrind) use custom hash tables backed by `mmap`.
+
+<br>
+
+#### Why track `active` flag instead of removing records?
+
+Removing from a fixed-size array requires shifting elements (O(n)) or maintaining a free list. Marking as inactive and reusing slots is simpler. The tradeoff: `find_record` scans inactive entries too, but for a debugging tool this is acceptable.
+
+---
 
 **Next**: Day 9 — Arena (Bump) Allocator →

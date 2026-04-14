@@ -33,7 +33,7 @@
 | Day | Topic | Learn | Build |
 |-----|-------|-------|-------|
 | [**D8 Mon**](days/day08-new-delete-placement-new.md) | How `new`/`delete` work | `operator new` vs `malloc`, alignment (`alignas`, `alignof`), placement new | Override global `operator new`/`delete` to track allocations, log sizes |
-| **D9 Tue** | Arena (Bump) allocator | Linear allocation, bulk reset, no individual free, great for frame-based work | Implement an **Arena Allocator** — allocate from a contiguous buffer, `reset()` frees everything |
+| [**D9 Tue**](days/day09-arena-allocator.md) | Arena (Bump) allocator | Linear allocation, bulk reset, no individual free, great for frame-based work | Implement an **Arena Allocator** — allocate from a contiguous buffer, `reset()` frees everything |
 | **D10 Wed** | Pool allocator | Fixed-size blocks, free list (intrusive linked list inside free blocks) | Implement a **Fixed-Size Pool Allocator**, benchmark vs `new`/`delete` in a loop |
 | **D11 Thu** | STL allocator interface | `std::allocator_traits`, making your allocator work with `std::vector` | Make your pool allocator compatible with STL containers |
 | **D12 Fri** | Review & benchmark | Profile allocator performance, understand fragmentation trade-offs | Write a benchmark comparing arena vs pool vs default allocator for 1M allocations |
