@@ -290,6 +290,258 @@ send(fd, buf, len, MSG_NOSIGNAL);
 
 ---
 
+## Minix 3 Deep Dive — Signal Delivery in a Microkernel
+
+Signal handling in Minix 3 perfectly illustrates the microkernel philosophy: the **kernel** only handles the bare minimum (notifications), while the **PM server** manages all signal policy (which signals, which handler, masking).
+
+<br>
+
+<h3 style="color: #E67E22;">Signal Handling Source Files</h3>
+
+```
+minix/servers/pm/
+├── signal.c      ← the main signal logic: delivery, checking, sigaction
+├── mproc.h       ← per-process signal state (pending, mask, handlers)
+└── forkexit.c    ← exit on fatal signals, signal during wait()
+
+minix/kernel/
+├── system/
+│   ├── do_sigsend.c   ← kernel pushes signal frame onto user stack
+│   ├── do_sigreturn.c ← kernel restores state after handler returns
+│   └── do_kill.c      ← kernel-level signal notification
+└── proc.c             ← SIGPENDING flag in process state
+```
+
+<br>
+
+<h3 style="color: #E67E22;">How Signal Delivery Works — The Full Path</h3>
+
+In Linux, the kernel directly manipulates the process's stack to invoke the signal handler. In Minix 3, PM orchestrates the whole thing:
+
+```
+Step 1: Signal originates
+  - User calls kill(pid, SIGTERM)
+  - Or hardware exception (SIGSEGV)
+  - Or kernel event (SIGCHLD on child exit)
+        │
+        ▼
+Step 2: PM receives the signal request
+  PM looks up the target process's signal state:
+  - Is this signal blocked (in mp_sigmask)? → add to mp_sigpending, done
+  - Is this signal ignored (SIG_IGN)? → discard, done
+  - Is this signal caught (handler installed)? → go to step 3
+  - Default action? → terminate, core dump, stop, or ignore
+        │
+        ▼
+Step 3: PM asks kernel to set up the signal frame
+  PM calls sys_sigsend() → kernel call SYS_SIGSEND
+  Kernel modifies the target process's saved stack:
+  - Pushes a sigcontext (saved registers) onto user stack
+  - Sets process's PC to the signal handler address
+  - Sets process's SP to the new stack frame
+  - When the process runs, it executes the handler
+        │
+        ▼
+Step 4: Signal handler runs (in user space)
+  Handler function executes with the pushed sigcontext below it
+        │
+        ▼
+Step 5: sigreturn()
+  When the handler returns, libc calls sigreturn()
+  → kernel call SYS_SIGRETURN
+  Kernel restores the original registers from the sigcontext
+  Process resumes where it was interrupted
+```
+
+<br>
+
+<h3 style="color: #E67E22;">PM's Signal Processing Code</h3>
+
+```c
+/* servers/pm/signal.c (simplified) */
+
+int do_kill(void) {
+    pid_t pid = m_in.m_lc_pm_sig.pid;
+    int signo = m_in.m_lc_pm_sig.sig;
+
+    /* Find the target process */
+    struct mproc *target = find_proc(pid);
+
+    /* Permission check: can the caller send this signal? */
+    if (!check_sig_permission(mp, target, signo))
+        return EPERM;
+
+    /* Process the signal */
+    sig_proc(target, signo, TRUE);
+
+    return OK;
+}
+
+void sig_proc(struct mproc *rmp, int signo, int trace) {
+    /* Is the signal blocked? */
+    if (sigismember(&rmp->mp_sigmask, signo)) {
+        /* Add to pending set — will be delivered when unblocked */
+        sigaddset(&rmp->mp_sigpending, signo);
+        return;
+    }
+
+    /* Check what action is configured */
+    struct sigaction *sa = &rmp->mp_sigact[signo];
+
+    if (sa->sa_handler == SIG_IGN) {
+        return;  /* ignored */
+    }
+
+    if (sa->sa_handler == SIG_DFL) {
+        /* Default action */
+        switch (signo) {
+            case SIGTERM: case SIGKILL: case SIGINT:
+                /* Terminate the process */
+                pm_exit(rmp, signo);
+                return;
+            case SIGSTOP: case SIGTSTP:
+                /* Stop the process */
+                rmp->mp_flags |= STOPPED;
+                sys_stop(rmp->mp_endpoint);
+                return;
+            case SIGCHLD: case SIGURG:
+                return;  /* default is ignore */
+            /* ... */
+        }
+    }
+
+    /* Custom handler — ask the kernel to set up the stack frame */
+    struct sigmsg smsg;
+    smsg.sm_signo = signo;
+    smsg.sm_sighandler = (vir_bytes)sa->sa_handler;
+    smsg.sm_mask = sa->sa_mask;  /* mask during handler execution */
+    smsg.sm_sigreturn = (vir_bytes)__sigreturn_stub;
+
+    sys_sigsend(rmp->mp_endpoint, &smsg);
+
+    /* Block this signal during handler execution (unless SA_NODEFER) */
+    if (!(sa->sa_flags & SA_NODEFER)) {
+        sigaddset(&rmp->mp_sigmask, signo);
+    }
+}
+```
+
+<br>
+
+<h3 style="color: #E67E22;">Kernel-Side Signal Frame Setup</h3>
+
+The kernel's `do_sigsend()` is where the magic happens — it modifies the process's saved registers to redirect execution to the signal handler:
+
+```c
+/* kernel/system/do_sigsend.c (simplified) */
+int do_sigsend(struct proc *caller, message *msg) {
+    struct proc *target = proc_addr(msg->SIG_ENDPT);
+    struct sigmsg *smsg = &msg->SIG_MSG;
+
+    /* Save current register state to a sigcontext on the user stack */
+    struct sigcontext sc;
+    sc.sc_eip = target->p_reg.pc;       /* where the process was executing */
+    sc.sc_esp = target->p_reg.sp;       /* original stack pointer */
+    sc.sc_eax = target->p_reg.retreg;   /* return value register */
+    sc.sc_mask = target->p_sigmask;     /* original signal mask */
+    /* ... save all other registers ... */
+
+    /* Push sigcontext onto the process's user stack */
+    vir_bytes new_sp = target->p_reg.sp - sizeof(struct sigcontext);
+    data_copy(KERNEL, &sc, target->p_endpoint, new_sp, sizeof(sc));
+
+    /* Push arguments for the signal handler: (signo, &sigcontext) */
+    new_sp -= sizeof(int);
+    data_copy(KERNEL, &smsg->sm_signo, target->p_endpoint, new_sp, sizeof(int));
+
+    /* Push return address (points to sigreturn stub) */
+    new_sp -= sizeof(vir_bytes);
+    data_copy(KERNEL, &smsg->sm_sigreturn, target->p_endpoint, new_sp,
+              sizeof(vir_bytes));
+
+    /* Redirect execution to the signal handler */
+    target->p_reg.pc = smsg->sm_sighandler;  /* jump to handler */
+    target->p_reg.sp = new_sp;               /* use new stack */
+
+    return OK;
+}
+```
+
+When the handler returns, the `sigreturn` stub calls `SYS_SIGRETURN`, and the kernel's `do_sigreturn()` restores the original registers from the sigcontext on the stack — seamlessly resuming the interrupted code.
+
+<br>
+
+<h3 style="color: #E67E22;">SIGKILL and SIGSTOP — Uncatchable Signals</h3>
+
+Even in Minix 3's PM, `SIGKILL` and `SIGSTOP` bypass the handler logic entirely:
+
+```c
+/* servers/pm/signal.c */
+if (signo == SIGKILL) {
+    /* Cannot be caught, blocked, or ignored — terminate immediately */
+    pm_exit(rmp, SIGKILL);
+    return;
+}
+if (signo == SIGSTOP) {
+    /* Cannot be caught — stop immediately */
+    sys_stop(rmp->mp_endpoint);
+    rmp->mp_flags |= STOPPED;
+    return;
+}
+```
+
+<br>
+
+<h3 style="color: #E67E22;">Hardware Exceptions → Signals</h3>
+
+When the CPU raises an exception (like a null pointer dereference), the kernel translates it into a signal notification to PM:
+
+```
+CPU exception (e.g., page fault at address 0x0):
+  kernel/arch/i386/exception.c:
+  ↓
+  cause_sig(proc_nr, SIGSEGV)     /* notify PM about this signal */
+  ↓
+  PM receives notification
+  ↓
+  sig_proc(target, SIGSEGV, ...)
+  ↓
+  Default action: terminate + core dump
+```
+
+```c
+/* kernel/proc.c (simplified) */
+void cause_sig(proc_nr_t proc_nr, int signo) {
+    struct proc *rp = proc_addr(proc_nr);
+
+    /* Mark process as having a pending signal */
+    rp->p_rts_flags |= SIG_PENDING;
+
+    /* Notify PM server that this process has a signal */
+    send_sig(PM_PROC_NR, SIGKSIGSM);
+}
+```
+
+<br>
+
+<h3 style="color: #E67E22;">Microkernel vs Monolithic — Signal Comparison</h3>
+
+| Aspect | Linux (Monolithic) | Minix 3 (Microkernel) |
+|--------|-------------------|----------------------|
+| Signal state | In `task_struct` (kernel) | In `mproc` (PM server, user-space) |
+| Handler dispatch | Kernel directly modifies user stack | PM instructs kernel via SYS_SIGSEND |
+| Permission checks | Kernel checks (single function) | PM checks (separate server) |
+| sigaction() | Kernel syscall handler | PM message handler |
+| Performance | Fast (no IPC) | Slower (PM ↔ kernel messages) |
+| Crash safety | Bug in signal code → kernel panic | Bug in PM signal code → PM restart |
+| Code clarity | Mixed with scheduler & memory | Cleanly separated in `signal.c` |
+
+The Minix 3 approach makes the signal delivery mechanism extremely transparent — you can literally trace each message and see exactly what happens. In Linux, the equivalent code in `kernel/signal.c` is interleaved with scheduler, thread group, and namespace logic.
+
+<br><br>
+
+---
+
 ## Interview Questions
 
 1. "What is a signal? How is it different from an exception?"
@@ -300,6 +552,8 @@ send(fd, buf, len, MSG_NOSIGNAL);
 6. "What is `SIGPIPE`? Why is it dangerous in server code?"
 7. "What is `signalfd()`? Why is it better than traditional signal handlers?"
 8. "Why do we need both `volatile` and `sig_atomic_t`?"
+9. "Walk through how a signal handler is invoked at the stack frame level."
+10. "How does Minix 3 deliver signals differently from Linux?"
 
 ---
 

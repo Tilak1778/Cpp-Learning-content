@@ -325,6 +325,248 @@ Or use a linker version script:
 
 ---
 
+## Minix 3 Deep Dive — Program Loading and exec()
+
+While Minix 3 uses a standard ELF loader for dynamic linking (similar to Linux's `ld.so`), the **exec() flow** — where the OS actually loads a new program into a process — is uniquely instructive because it clearly shows the three-server cooperation.
+
+<br>
+
+<h3 style="color: #E67E22;">Source Files for Program Loading</h3>
+
+```
+minix/servers/pm/
+├── exec.c          ← PM-side exec: coordinate the overall flow
+
+minix/servers/vfs/
+├── exec.c          ← VFS-side exec: read ELF headers, load segments from file
+
+minix/servers/vm/
+├── exec.c          ← VM-side exec: destroy old address space, create new one
+├── region.c        ← set up text, data, bss, stack regions
+
+minix/lib/libc/sys/
+├── execve.c        ← libc wrapper (packs args into message)
+
+minix/include/
+├── minix/exec.h    ← shared structures between PM, VFS, VM
+```
+
+<br>
+
+<h3 style="color: #E67E22;">The exec() Message Flow in Minix 3</h3>
+
+```
+User Process           PM              VFS             VM              Kernel
+     │                  │               │               │                │
+     │─exec("/bin/ls")─►│               │               │                │
+     │                  │               │               │                │
+     │                  │──EXEC_OPEN───►│               │                │
+     │                  │               │ open file     │                │
+     │                  │               │ read ELF hdr  │                │
+     │                  │               │ parse PHDR:   │                │
+     │                  │               │  text_addr,   │                │
+     │                  │               │  text_size,   │                │
+     │                  │               │  data_addr,   │                │
+     │                  │               │  data_size,   │                │
+     │                  │               │  entry_point  │                │
+     │                  │◄──header info─│               │                │
+     │                  │               │               │                │
+     │                  │──EXEC_NEWMEM──────────────────►│               │
+     │                  │               │               │ free old       │
+     │                  │               │               │ address space  │
+     │                  │               │               │ create new:    │
+     │                  │               │               │  text region   │
+     │                  │               │               │  data region   │
+     │                  │               │               │  bss region    │
+     │                  │               │               │  stack region  │
+     │                  │◄─────────────────────────OK───│               │
+     │                  │               │               │                │
+     │                  │──EXEC_LOAD───►│               │                │
+     │                  │               │ read segments │                │
+     │                  │               │ from file     │                │
+     │                  │               │ copy into new │                │
+     │                  │               │ address space │                │
+     │                  │◄──────────OK──│               │                │
+     │                  │               │               │                │
+     │                  │──SYS_EXEC─────────────────────────────────────►│
+     │                  │               │               │    set PC to   │
+     │                  │               │               │    entry_point │
+     │                  │               │               │    set SP to   │
+     │                  │               │               │    stack top   │
+     │                  │◄──────────────────────────────────────────OK───│
+     │                  │               │               │                │
+     │ (now running /bin/ls at entry_point)              │                │
+```
+
+<br>
+
+<h3 style="color: #E67E22;">ELF Header Parsing in VFS</h3>
+
+```c
+/* servers/vfs/exec.c (simplified) */
+int do_exec(void) {
+    char path[PATH_MAX];
+    /* ... get pathname from message ... */
+
+    /* Open the executable */
+    struct filp *f = open_file(path, O_RDONLY);
+
+    /* Read the ELF header */
+    Elf32_Ehdr ehdr;
+    read_file(f, &ehdr, sizeof(ehdr), 0);
+
+    /* Verify it's a valid ELF */
+    if (memcmp(ehdr.e_ident, ELFMAG, 4) != 0)
+        return ENOEXEC;
+
+    /* Read program headers — these describe the segments to load */
+    Elf32_Phdr phdr[ehdr.e_phnum];
+    read_file(f, phdr, sizeof(phdr), ehdr.e_phoff);
+
+    /* Extract segment info */
+    struct exec_info execi;
+    for (int i = 0; i < ehdr.e_phnum; i++) {
+        if (phdr[i].p_type == PT_LOAD) {
+            if (phdr[i].p_flags & PF_X) {
+                /* Text (code) segment */
+                execi.text_addr = phdr[i].p_vaddr;
+                execi.text_size = phdr[i].p_memsz;
+                execi.text_offset = phdr[i].p_offset;
+            } else {
+                /* Data segment */
+                execi.data_addr = phdr[i].p_vaddr;
+                execi.data_size = phdr[i].p_filesz;
+                execi.bss_size  = phdr[i].p_memsz - phdr[i].p_filesz;
+                execi.data_offset = phdr[i].p_offset;
+            }
+        }
+        if (phdr[i].p_type == PT_INTERP) {
+            /* Dynamic linker path (e.g., /usr/libexec/ld.elf_so) */
+            read_file(f, execi.interp, phdr[i].p_filesz, phdr[i].p_offset);
+        }
+    }
+
+    execi.entry_point = ehdr.e_entry;
+
+    /* Send segment info to PM, which will forward to VM */
+    return send_exec_info(pm_endpoint, &execi);
+}
+```
+
+<br>
+
+<h3 style="color: #E67E22;">ELF Segment Layout Explained</h3>
+
+```
+ELF File on Disk:                     Process Address Space After Loading:
+┌─────────────────────┐               ┌─────────────────────────┐
+│ ELF Header          │               │ Stack (grows down)      │
+│  e_entry = 0x400080 │               │         ↓               │
+│  e_phoff = 52       │               ├─────────────────────────┤
+├─────────────────────┤               │ (gap — unmapped)        │
+│ Program Headers     │               ├─────────────────────────┤
+│  LOAD: text segment │               │ Heap (grows up)         │
+│    vaddr = 0x400000 │               │         ↑               │
+│    filesz = 0x1000  │               ├─────────────────────────┤
+│    flags = R+X      │               │ .bss  (zeroed)  [RW]    │
+│  LOAD: data segment │               │  0x601100 - 0x602000    │
+│    vaddr = 0x601000 │               ├─────────────────────────┤
+│    filesz = 0x100   │               │ .data (initialized)[RW] │
+│    memsz = 0x1000   │               │  0x601000 - 0x601100    │
+│    flags = R+W      │               ├─────────────────────────┤
+│  INTERP: ld.so path │               │ .text (code)    [RX]    │
+├─────────────────────┤               │  0x400000 - 0x401000    │
+│ .text section       │               │  entry: 0x400080        │
+│ (machine code)      │               └─────────────────────────┘
+├─────────────────────┤
+│ .data section       │               VM server creates 4 regions:
+│ (initialized data)  │                 1. text:  addr=0x400000, len=0x1000, RX
+└─────────────────────┘                 2. data:  addr=0x601000, len=0x100, RW
+                                        3. bss:   addr=0x601100, len=0xF00, RW (zeroed)
+                                        4. stack: addr=0x7FFFF000, len=0x10000, RW
+```
+
+<br>
+
+<h3 style="color: #E67E22;">VM Server — Creating the New Address Space</h3>
+
+```c
+/* servers/vm/exec.c (simplified) */
+int do_exec_newmem(message *msg) {
+    struct vmproc *vmp = find_proc(msg->VMEN_ENDPOINT);
+    struct exec_info *execi = &msg->VMEN_EXEC_INFO;
+
+    /* Destroy old address space completely */
+    free_proc_memory(vmp);
+
+    /* Create new regions for the new program */
+
+    /* Text (code) segment — read-only, executable */
+    map_page_region(vmp, execi->text_addr, execi->text_size,
+                    VR_DIRECT, &mem_type_file);
+
+    /* Data segment — read-write, from file */
+    map_page_region(vmp, execi->data_addr, execi->data_size,
+                    VR_WRITABLE | VR_DIRECT, &mem_type_file);
+
+    /* BSS segment — read-write, zeroed (anonymous) */
+    map_page_region(vmp, execi->data_addr + execi->data_size,
+                    execi->bss_size,
+                    VR_WRITABLE, &mem_type_anon);
+
+    /* Stack — read-write, at top of address space */
+    map_page_region(vmp, STACK_BASE - DEFAULT_STACK_SIZE,
+                    DEFAULT_STACK_SIZE,
+                    VR_WRITABLE, &mem_type_anon);
+
+    /* Build new page table */
+    pt_new(&vmp->vm_pt);
+
+    return OK;
+}
+```
+
+<br>
+
+<h3 style="color: #E67E22;">Dynamic Linking in Minix 3</h3>
+
+Minix 3 uses NetBSD's dynamic linker (`ld.elf_so`). The flow after `exec()` sets up the address space:
+
+```
+1. Kernel starts the process at the DYNAMIC LINKER's entry point
+   (not the program's main — the PT_INTERP header told it where ld.so is)
+
+2. ld.elf_so runs:
+   a. Maps itself into the address space
+   b. Reads the executable's .dynamic section
+   c. Finds needed shared libraries (LD_LIBRARY_PATH, /usr/lib)
+   d. mmap's each .so (sends mmap messages to VM server)
+   e. Resolves symbols, sets up PLT/GOT
+   f. Calls .init constructors (global C++ objects)
+   g. Jumps to the executable's actual entry point
+
+3. main() runs
+```
+
+This is identical to Linux's flow, but each `mmap()` call goes through the VM server as a message rather than being a direct kernel call.
+
+<br>
+
+<h3 style="color: #E67E22;">Static vs Dynamic Linking in Minix 3 — Performance Implications</h3>
+
+| | Static | Dynamic (Minix 3) | Dynamic (Linux) |
+|---|--------|-------------------|-----------------|
+| exec() syscalls | PM + VM + VFS | PM + VM + VFS + many mmap messages | Kernel-only (fewer context switches) |
+| Library loading | None (all in binary) | ld.elf_so sends mmap messages to VM server | ld.so makes mmap syscalls directly |
+| PLT/GOT overhead | None | Same as Linux | Same |
+| Startup time | Fastest | Slowest (message passing overhead) | Middle ground |
+
+For Minix 3, static linking is more common in system servers (PM, VFS, VM) because they need to start before the dynamic linker infrastructure is available.
+
+<br><br>
+
+---
+
 ## Interview Questions
 
 1. "What is the difference between static and dynamic linking?"
@@ -335,6 +577,8 @@ Or use a linker version script:
 6. "What is `extern \"C\"` and why is it needed with `dlsym`?"
 7. "How does `dlopen`/`dlsym` work?"
 8. "What is the relationship between Pimpl idiom and ABI stability?"
+9. "Walk through the ELF loading process during exec()."
+10. "What are the PT_LOAD and PT_INTERP program headers in an ELF file?"
 
 ---
 

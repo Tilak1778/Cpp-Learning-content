@@ -323,6 +323,361 @@ Mem:           16G         4G          500M       100M      11.5G        11G
 
 ---
 
+## Minix 3 Deep Dive — VFS and MFS
+
+Minix 3's file system is perhaps the **best place to study OS file systems** because:
+1. The VFS layer and concrete file systems are separate user-space servers
+2. The Minix File System (MFS) is intentionally simple — based on the classic Minix FS from Tanenbaum's textbook
+3. The code is small enough to read in full (~3000 lines for MFS)
+
+<br>
+
+<h3 style="color: #E67E22;">Source Tree — File System Components</h3>
+
+```
+minix/servers/vfs/               ← Virtual File System server
+├── main.c                       ← main loop: receive message, dispatch
+├── open.c                       ← open(), close(), creat()
+├── read.c                       ← read(), write(), lseek()
+├── path.c                       ← path resolution (name → inode)
+├── link.c                       ← link(), unlink(), rename()
+├── stadir.c                     ← stat(), mkdir(), rmdir()
+├── mount.c                      ← mount(), umount()
+├── pipe.c                       ← pipe(), FIFO support
+├── device.c                     ← device file I/O (→ sends to drivers)
+├── table.c                      ← syscall dispatch table
+├── fproc.h                      ← per-process file state (fd table)
+├── filp.h                       ← open file description (shared by fd's)
+├── vnode.h                      ← VFS-level inode (abstracts over FS types)
+└── request.c                    ← sends requests to concrete FS servers
+
+minix/servers/mfs/               ← Minix File System (concrete FS)
+├── main.c                       ← MFS main loop
+├── table.c                      ← request dispatch
+├── read.c                       ← block read/write
+├── write.c                      ← write data blocks
+├── open.c                       ← create/open files
+├── link.c                       ← hard links, unlink
+├── path.c                       ← directory lookup within MFS
+├── inode.c                      ← inode management (read/write/alloc/free)
+├── inode.h                      ← inode structure definition
+├── super.c                      ← superblock management
+├── super.h                      ← superblock structure
+├── buf.h                        ← block cache buffer structure
+└── cache.c                      ← block cache (MFS's equivalent of page cache)
+
+minix/servers/ext2/              ← ext2 file system (alternative)
+├── (similar structure to mfs/)
+```
+
+<br>
+
+<h3 style="color: #E67E22;">VFS → Concrete FS Communication</h3>
+
+This is the microkernel version of Linux's VFS dispatch. In Linux, VFS calls function pointers inside the kernel. In Minix 3, VFS **sends messages** to the file system server:
+
+```
+User calls: read(fd, buf, 100)
+     │
+     ▼
+VFS server receives the message
+  1. Look up fd in fproc[caller].fp_filp[fd]
+  2. Get the filp (open file description)
+  3. Get the vnode (VFS-level inode)
+  4. Determine which FS server manages this file
+     │
+     ▼
+VFS sends REQ_READ message to MFS server
+  - includes: inode number, position, byte count
+     │
+     ▼
+MFS server receives REQ_READ
+  1. Look up inode in its inode cache
+  2. Calculate which disk blocks contain the data
+  3. Read blocks from disk (or block cache)
+  4. Copy data to the requesting process's buffer
+  5. Reply to VFS with bytes read
+     │
+     ▼
+VFS receives reply, updates file position
+VFS replies to user process with bytes read
+```
+
+```c
+/* servers/vfs/request.c (simplified) */
+int req_readwrite(endpoint_t fs_ep, ino_t inode_nr,
+                  off_t pos, int rw_flag,
+                  endpoint_t user_ep, char *user_buf,
+                  size_t nbytes, off_t *new_pos, size_t *cum_io) {
+    message m;
+    m.m_type = (rw_flag == READING) ? REQ_READ : REQ_WRITE;
+    m.REQ_INODE_NR = inode_nr;
+    m.REQ_POSITION = pos;
+    m.REQ_NBYTES = nbytes;
+    m.REQ_USER_ADDR = user_buf;
+    m.REQ_USER_ENDPT = user_ep;
+
+    /* Send to the file system server and wait for reply */
+    int r = fs_sendrec(fs_ep, &m);
+
+    *new_pos = m.RES_POSITION;
+    *cum_io = m.RES_NBYTES;
+    return r;
+}
+```
+
+<br>
+
+<h3 style="color: #E67E22;">The MFS Inode — Minix 3's On-Disk Inode</h3>
+
+```c
+/* servers/mfs/inode.h (simplified from Minix 3) */
+struct inode {
+    u16_t  i_mode;            /* file type, protection bits (rwxrwxrwx) */
+    u16_t  i_nlinks;          /* number of hard links to this inode */
+    u16_t  i_uid;             /* owner user ID */
+    u16_t  i_gid;             /* owner group ID */
+    off_t  i_size;            /* file size in bytes */
+    time_t i_atime;           /* last access time */
+    time_t i_mtime;           /* last modification time */
+    time_t i_ctime;           /* last inode change time */
+
+    /* Block pointers — classic Minix FS uses direct + indirect */
+    zone_t i_zone[NR_TZONES]; /* block pointers:
+                                  [0]-[6]:  7 direct zones (blocks)
+                                  [7]:      indirect zone
+                                  [8]:      double indirect zone */
+
+    /* In-memory fields (not on disk) */
+    dev_t  i_dev;             /* which device this inode is on */
+    ino_t  i_num;             /* inode number */
+    int    i_count;           /* reference count (how many open) */
+    char   i_dirt;            /* dirty flag — needs write-back */
+};
+```
+
+Compare this to the ext4 inode we discussed earlier — the Minix inode is deliberately simpler:
+- Only 7 direct zones (vs ext4's 12)
+- Single and double indirect (vs ext4's triple indirect + extents)
+- Smaller maximum file size (but much easier to understand)
+
+<br>
+
+<h3 style="color: #E67E22;">Block Mapping — Finding Data on Disk</h3>
+
+```c
+/* servers/mfs/read.c (simplified) */
+zone_t read_map(struct inode *rip, off_t position) {
+    /* Convert file position to block number */
+    int block_pos = position / BLOCK_SIZE;
+    zone_t zone;
+
+    if (block_pos < NR_DZONES) {
+        /* Direct zone — stored right in the inode */
+        zone = rip->i_zone[block_pos];
+    }
+    else if (block_pos < NR_DZONES + NR_INDIRECTS) {
+        /* Single indirect: read the indirect block, then index into it */
+        int index = block_pos - NR_DZONES;
+        zone_t *indirect_block = read_block(rip->i_zone[NR_DZONES]);
+        zone = indirect_block[index];
+    }
+    else {
+        /* Double indirect: two levels of indirection */
+        int index = block_pos - NR_DZONES - NR_INDIRECTS;
+        int indirect1 = index / NR_INDIRECTS;
+        int indirect2 = index % NR_INDIRECTS;
+
+        zone_t *dbl_indirect = read_block(rip->i_zone[NR_DZONES + 1]);
+        zone_t *indirect     = read_block(dbl_indirect[indirect1]);
+        zone = indirect[indirect2];
+    }
+
+    return zone;  /* disk block number where data lives */
+}
+```
+
+```
+File position → Block mapping:
+
+Small file (< 7 blocks = 7KB with 1K blocks):
+  inode.i_zone[0..6] → directly to data blocks
+
+Medium file (< 7 + 1024 blocks):
+  inode.i_zone[7] → indirect block → 1024 data block pointers
+
+Large file (up to ~1GB):
+  inode.i_zone[8] → double indirect → 1024 indirect blocks → 1024² data blocks
+
+  ┌─────────────┐
+  │    Inode     │
+  │  zone[0] ───┼──► Data Block 0
+  │  zone[1] ───┼──► Data Block 1
+  │  ...         │
+  │  zone[6] ───┼──► Data Block 6
+  │  zone[7] ───┼──► ┌──────────────────┐
+  │             │    │ Indirect Block   │
+  │             │    │  [0] ──► Data 7  │
+  │             │    │  [1] ──► Data 8  │
+  │             │    │  ...             │
+  │             │    │  [1023]──► Data  │
+  │             │    └──────────────────┘
+  │  zone[8] ───┼──► Double Indirect...
+  └─────────────┘
+```
+
+<br>
+
+<h3 style="color: #E67E22;">Directory Lookup in MFS</h3>
+
+```c
+/* servers/mfs/path.c (simplified) */
+int search_dir(struct inode *dir_inode, char *name,
+               ino_t *result_inode, int operation) {
+    /* Read directory data block by block */
+    off_t pos = 0;
+    struct direct entry;  /* { ino_t d_ino; char d_name[NAME_MAX]; } */
+
+    while (pos < dir_inode->i_size) {
+        /* Read one directory entry */
+        zone_t block = read_map(dir_inode, pos);
+        read_block_data(block, pos % BLOCK_SIZE, &entry, sizeof(entry));
+
+        if (operation == LOOK_UP) {
+            if (entry.d_ino != 0 && strcmp(entry.d_name, name) == 0) {
+                *result_inode = entry.d_ino;
+                return OK;  /* Found it! */
+            }
+        }
+        else if (operation == DELETE) {
+            if (entry.d_ino != 0 && strcmp(entry.d_name, name) == 0) {
+                entry.d_ino = 0;  /* mark entry as free */
+                write_block_data(block, pos % BLOCK_SIZE,
+                                 &entry, sizeof(entry));
+                return OK;
+            }
+        }
+        else if (operation == CREATE) {
+            if (entry.d_ino == 0) {
+                /* Found empty slot — fill it */
+                entry.d_ino = *result_inode;
+                strcpy(entry.d_name, name);
+                write_block_data(block, pos % BLOCK_SIZE,
+                                 &entry, sizeof(entry));
+                return OK;
+            }
+        }
+
+        pos += sizeof(entry);
+    }
+
+    return ENOENT;  /* not found */
+}
+```
+
+This is a linear scan — simple but slow for directories with many entries. Linux's ext4 uses HTree (hash tree) indexing for O(1) lookup. The simplicity of Minix's approach makes it perfect for understanding the fundamentals before studying production optimizations.
+
+<br>
+
+<h3 style="color: #E67E22;">The MFS Block Cache</h3>
+
+MFS maintains its own block cache (similar to Linux's page cache, but at the file system level):
+
+```c
+/* servers/mfs/cache.c (simplified) */
+struct buf {
+    block_t   b_blocknr;    /* which disk block */
+    dev_t     b_dev;        /* which device */
+    char      b_data[BLOCK_SIZE];  /* cached block data */
+    char      b_dirt;       /* dirty flag — needs write-back */
+    int       b_count;      /* reference count */
+    struct buf *b_next;     /* hash chain */
+    struct buf *b_prev;     /* LRU chain */
+};
+
+struct buf *get_block(dev_t dev, block_t block, int how) {
+    /* Search hash table for cached block */
+    struct buf *bp = search_hash(dev, block);
+
+    if (bp) {
+        bp->b_count++;
+        return bp;  /* cache hit — fast! */
+    }
+
+    /* Cache miss — find an unused buffer (LRU eviction) */
+    bp = lru_evict();
+
+    if (bp->b_dirt) {
+        /* Evicted buffer is dirty — write it back to disk first */
+        write_block_to_disk(bp);
+    }
+
+    /* Read the requested block from disk */
+    bp->b_blocknr = block;
+    bp->b_dev = dev;
+    if (how == NORMAL) {
+        read_block_from_disk(bp);
+    }
+
+    return bp;
+}
+
+void put_block(struct buf *bp) {
+    bp->b_count--;
+    if (bp->b_count == 0) {
+        /* Move to tail of LRU list (least recently used) */
+        lru_append(bp);
+    }
+}
+```
+
+<br>
+
+<h3 style="color: #E67E22;">The Superblock — File System Metadata</h3>
+
+```c
+/* servers/mfs/super.h (simplified) */
+struct super_block {
+    u32_t  s_ninodes;       /* total number of inodes */
+    u16_t  s_nzones;        /* total number of zones (blocks) */
+    u16_t  s_imap_blocks;   /* number of inode bitmap blocks */
+    u16_t  s_zmap_blocks;   /* number of zone bitmap blocks */
+    u16_t  s_firstdatazone; /* block number of first data zone */
+    u16_t  s_log_zone_size; /* log2 of blocks per zone */
+    off_t  s_max_size;      /* maximum file size */
+    u16_t  s_magic;         /* magic number (identifies FS type) */
+    /* ... */
+};
+
+/* On-disk layout:
+   Block 0:  Boot block (for bootloader, even if unused)
+   Block 1:  Superblock
+   Blocks 2..N:  Inode bitmap (1 bit per inode: free/used)
+   Blocks N..M:  Zone bitmap (1 bit per zone: free/used)
+   Blocks M..K:  Inode table (array of inode structs)
+   Blocks K..end: Data zones (actual file data)
+*/
+```
+
+<br>
+
+<h3 style="color: #E67E22;">Comparison: Linux ext4 vs Minix 3 MFS</h3>
+
+| Feature | ext4 (Linux) | MFS (Minix 3) |
+|---------|-------------|---------------|
+| Block addressing | Extents (contiguous ranges) | Indirect block pointers |
+| Directory lookup | HTree (O(1) hash) | Linear scan (O(n)) |
+| Journal | Yes (crash recovery) | No (simpler, but less safe) |
+| Max file size | 16 TB | ~1 GB |
+| Block size | 1K–64K (typically 4K) | 1K–4K |
+| Inode allocation | Flex block groups | Simple bitmap |
+| Code size | ~30K lines | ~3K lines |
+| Learning value | Production-grade, complex | Textbook-grade, readable |
+
+<br><br>
+
+---
+
 ## Interview Questions
 
 1. "What is an inode? What information does it store?"
@@ -333,6 +688,9 @@ Mem:           16G         4G          500M       100M      11.5G        11G
 6. "What happens to file descriptors after `fork()`?"
 7. "Why is the file name NOT stored in the inode?"
 8. "How does ext4 handle large files? (extents vs indirect blocks)"
+9. "Walk through a read() call from user-space to disk block in Minix 3."
+10. "How does the Minix FS block cache implement LRU eviction?"
+11. "How does directory entry lookup work in MFS? What are its limitations?"
 
 ---
 

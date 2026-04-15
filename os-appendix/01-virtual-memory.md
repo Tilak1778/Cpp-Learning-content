@@ -344,6 +344,237 @@ You can see this for any process: `cat /proc/<pid>/maps` on Linux or `vmmap <pid
 
 ---
 
+## Minix 3 Deep Dive — Virtual Memory Implementation
+
+Minix 3 is a **microkernel** OS — unlike Linux where VM is handled inside the kernel, Minix 3 runs a dedicated **VM server** (`servers/vm/`) as a user-space process. This is architecturally cleaner and makes the VM logic easier to study.
+
+<br>
+
+<h3 style="color: #E67E22;">How Minix 3's VM Server Is Organized</h3>
+
+```
+Minix 3 Source Tree (VM-related):
+
+minix/servers/vm/
+├── main.c           ← VM server main loop (receives messages, dispatches)
+├── mmap.c           ← mmap / munmap implementation
+├── pagefaults.c     ← page fault handler (called via kernel upcall)
+├── region.c         ← virtual memory region management (VMAs)
+├── mem_anon.c       ← anonymous memory backend (heap, stack)
+├── mem_file.c       ← file-backed memory backend (mmap'd files)
+├── mem_shared.c     ← shared memory regions
+├── pagetable.c      ← page table manipulation (arch-specific)
+├── fork.c           ← VM-side of fork() — COW setup
+├── exec.c           ← VM-side of exec() — new address space
+├── break.c          ← brk/sbrk implementation (heap growth)
+└── utility.c        ← helper functions
+
+minix/kernel/
+├── arch/i386/memory.c   ← low-level page table operations
+└── arch/i386/exception.c ← hardware page fault trap → message to VM server
+```
+
+<br>
+
+<h3 style="color: #E67E22;">Key Difference: Monolithic (Linux) vs Microkernel (Minix 3)</h3>
+
+```
+Linux (Monolithic):
+  Page fault → CPU exception → kernel handler (mm/memory.c)
+  → kernel allocates frame, updates page table
+  → returns to user process
+  ALL happens inside the kernel — fast, but a bug here crashes everything.
+
+Minix 3 (Microkernel):
+  Page fault → CPU exception → kernel sends message to VM server
+  → VM server (user-space) decides what to do
+  → VM server asks kernel to map the physical frame
+  → kernel updates page table
+  → process resumes
+  Slower (extra message passes), but VM bugs can't crash the kernel.
+```
+
+The kernel-side exception handler is in `kernel/arch/i386/exception.c`. When a page fault occurs, instead of handling it directly, the kernel packages it as a message and sends it to the VM server:
+
+```c
+/* kernel/arch/i386/exception.c (simplified) */
+void page_fault_handler(struct proc *p, vir_bytes addr, int flags) {
+    /* Don't handle it here — tell the VM server */
+    p->p_pagefault.pf_virtual = addr;
+    p->p_pagefault.pf_flags = flags;
+
+    /* Suspend this process and notify VM server */
+    vm_notify_sig_wrapper(p);
+}
+```
+
+<br>
+
+<h3 style="color: #E67E22;">Memory Regions in Minix 3</h3>
+
+Minix 3's VM server tracks each process's virtual address space as a list of **virtual memory regions** (similar to Linux's `vm_area_struct`). This is defined in `servers/vm/region.h`:
+
+```c
+/* servers/vm/region.h (simplified) */
+struct vir_region {
+    vir_bytes   vaddr;      /* start virtual address */
+    vir_bytes   length;     /* length of region */
+    u16_t       flags;      /* VR_WRITABLE, VR_SHARED, etc. */
+    struct phys_region *physblocks;  /* physical page backing */
+    mem_type_t  *memtype;   /* backend: anon, file, shared, etc. */
+    struct vir_region *next; /* linked list of regions */
+};
+```
+
+Each region has a **memory type backend** — a struct of function pointers that define how to handle page faults, how to fork the region, etc:
+
+```c
+/* servers/vm/ — memory type backends */
+struct mem_type {
+    int (*ev_pagefault)(struct vmproc*, struct vir_region*,
+                        struct phys_region*, int write);
+    int (*ev_copy)(struct vir_region*, struct vir_region*);
+    int (*ev_reference)(struct phys_region*);
+    int (*ev_unreference)(struct phys_region*);
+    /* ... */
+};
+
+/* Anonymous memory (heap, stack): mem_anon.c */
+/* File-backed memory (mmap'd files): mem_file.c */
+/* Shared memory: mem_shared.c */
+```
+
+This is effectively the **Strategy Pattern** — different memory types plug in different behaviors. When a page fault occurs, the VM server calls the appropriate backend's `ev_pagefault` handler.
+
+<br>
+
+<h3 style="color: #E67E22;">Page Fault Handling in Minix 3</h3>
+
+The page fault flow in `servers/vm/pagefaults.c`:
+
+```c
+/* servers/vm/pagefaults.c (simplified logic) */
+int handle_pagefault(endpoint_t ep, vir_bytes addr, int write) {
+    struct vmproc *vmp = find_process(ep);
+    struct vir_region *region = find_region(vmp, addr);
+
+    if (!region) {
+        /* No region covers this address → SIGSEGV */
+        return EFAULT;
+    }
+
+    if (write && !(region->flags & VR_WRITABLE)) {
+        /* Write to read-only region → SIGSEGV */
+        return EFAULT;
+    }
+
+    struct phys_region *ph = find_phys_region(region, addr);
+
+    if (!ph) {
+        /* Page not yet allocated — demand paging */
+        /* Call the memory type's pagefault handler */
+        region->memtype->ev_pagefault(vmp, region, ph, write);
+    } else if (write && ph->ph_page->refcount > 1) {
+        /* Copy-on-Write: this page is shared, need a private copy */
+        phys_bytes new_page = alloc_mem(1);
+        copy_page(ph->ph_page->phys, new_page);
+        ph->ph_page->refcount--;
+        ph->ph_page = new_phys_block(new_page);
+    }
+
+    /* Ask kernel to install the mapping */
+    pt_writemap(&vmp->vm_pt, addr, ph->ph_page->phys,
+                PAGE_SIZE, write ? PT_WRITABLE : 0);
+
+    return OK;
+}
+```
+
+Notice how this mirrors exactly the concepts we covered: demand paging (allocate on first access), COW (copy when shared page is written), and invalid access (SIGSEGV). The difference is that in Minix 3, all this logic runs as a regular user-space program communicating with the kernel via messages.
+
+<br>
+
+<h3 style="color: #E67E22;">Page Table Operations in Minix 3</h3>
+
+Minix 3 uses the same x86 multi-level page tables, but the page table manipulation is done by the VM server asking the kernel to update entries. The architecture-specific code is in `servers/vm/pagetable.c`:
+
+```c
+/* servers/vm/pagetable.c (simplified) */
+int pt_writemap(pt_t *pt, vir_bytes v, phys_bytes phys,
+                size_t bytes, u32_t flags) {
+    /* Walk the page table levels, allocating intermediate tables as needed */
+    int pde = I386_VM_PDE(v);   /* page directory index */
+    int pte = I386_VM_PTE(v);   /* page table index */
+
+    if (!(pt->pt_dir[pde] & I386_VM_PRESENT)) {
+        /* Allocate a new page table for this directory entry */
+        phys_bytes pt_phys = alloc_mem(1);
+        pt->pt_dir[pde] = pt_phys | I386_VM_PRESENT | I386_VM_WRITE;
+    }
+
+    /* Set the page table entry */
+    pt->pt_pt[pde][pte] = phys | flags | I386_VM_PRESENT;
+
+    return OK;
+}
+```
+
+<br>
+
+<h3 style="color: #E67E22;">COW in fork() — The VM Server Side</h3>
+
+When `fork()` happens, the PM server asks the VM server to duplicate the address space. The VM server's `fork.c` does NOT copy any physical pages — it marks everything COW:
+
+```c
+/* servers/vm/fork.c (simplified logic) */
+int do_fork(message *msg) {
+    struct vmproc *parent = &vmproc[msg->VMF_PARENT];
+    struct vmproc *child  = &vmproc[msg->VMF_CHILD];
+
+    /* For each region in the parent's address space */
+    for (struct vir_region *vr = parent->vm_regions; vr; vr = vr->next) {
+        /* Create a copy of the region descriptor for the child */
+        struct vir_region *new_vr = copy_region(vr);
+
+        /* Share physical pages (increment refcount) */
+        for (each phys_region in vr) {
+            ph->ph_page->refcount++;
+        }
+
+        /* Mark BOTH parent and child pages as read-only (COW) */
+        clear_writable_flags(vr);
+        clear_writable_flags(new_vr);
+
+        add_region(child, new_vr);
+    }
+
+    /* Set up child's page table to reflect the shared mappings */
+    pt_bind(&child->vm_pt, child);
+
+    return OK;
+}
+```
+
+The refcount on physical pages is the key — when a page fault handler sees `refcount > 1` and a write access, it knows to perform the COW copy.
+
+<br>
+
+<h3 style="color: #E67E22;">Why Study Minix 3 for VM?</h3>
+
+| Aspect | Linux | Minix 3 |
+|--------|-------|---------|
+| VM code location | `mm/` inside kernel (monolithic) | `servers/vm/` (user-space server) |
+| Page fault path | Kernel trap → kernel handler → done | Kernel trap → message → VM server → message → kernel map |
+| Code complexity | ~100K lines in `mm/` | ~5K lines in `servers/vm/` |
+| Crash impact | VM bug = kernel panic | VM server can be restarted |
+| Learning value | Production-grade, hard to trace | Clean, readable, perfect for learning |
+
+The VM server source is one of the best ways to see virtual memory concepts in real, working code without getting lost in Linux's complexity.
+
+<br><br>
+
+---
+
 ## Interview Questions
 
 1. "What is virtual memory? Why does it exist?"
@@ -354,6 +585,8 @@ You can see this for any process: `cat /proc/<pid>/maps` on Linux or `vmmap <pid
 6. "How does `fork()` use copy-on-write?"
 7. "Why can `malloc(1GB)` succeed even with 100MB of free RAM?"
 8. "Draw the memory layout of a process."
+9. "How does a microkernel (Minix 3) handle page faults differently from a monolithic kernel (Linux)?"
+10. "What is the advantage of running the VM as a user-space server?"
 
 ---
 
