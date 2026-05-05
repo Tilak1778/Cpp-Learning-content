@@ -51,12 +51,12 @@
 
 | Day | Topic | Learn | Build |
 |-----|-------|-------|-------|
-| **D15 Mon** | Singleton | Meyer's singleton, `std::call_once`, why double-checked locking is broken pre-C++11 | Implement 3 singleton variants, test thread safety with 10 threads racing to `getInstance()` |
-| **D16 Tue** | Factory & Abstract Factory | Decoupling creation from usage, registration-based factory | Build a **Shape Factory** — register creators by string name, create objects dynamically |
-| **D17 Wed** | Builder pattern | Step-by-step construction, fluent API, immutable result objects | Build a **QueryBuilder** — `.select()`, `.from()`, `.where()`, `.build()` returns a query string |
-| **D18 Thu** | Observer pattern | Subject/observer, weak references to prevent dangling, unsubscribe safety | Build an **EventEmitter** — `on(event, callback)`, `emit(event, data)`, `off(event, id)` |
-| **D19 Fri** | Strategy & Command | Runtime-swappable algorithms, command encapsulation for undo/redo | Build a **text editor** with command pattern — `Type`, `Delete`, `undo()`, `redo()` |
-| **D20 Sat** | State Machine | States, transitions, guards, entry/exit actions | Build a **TCP connection state machine** — CLOSED, LISTEN, SYN_SENT, ESTABLISHED, etc. |
+| [**D15 Mon**](days/day15-singleton.md) | Singleton | Meyer's singleton, `std::call_once`, why double-checked locking is broken pre-C++11 | Implement 3 singleton variants, test thread safety with 10 threads racing to `getInstance()` |
+| [**D16 Tue**](days/day16-factory-abstract-factory.md) | Factory & Abstract Factory | Decoupling creation from usage, registration-based factory | Build a **Shape Factory** — register creators by string name, create objects dynamically |
+| [**D17 Wed**](days/day17-builder-pattern.md) | Builder pattern | Step-by-step construction, fluent API, immutable result objects | Build a **QueryBuilder** — `.select()`, `.from()`, `.where()`, `.build()` returns a query string |
+| [**D18 Thu**](days/day18-observer-pattern.md) | Observer pattern | Subject/observer, weak references to prevent dangling, unsubscribe safety | Build an **EventEmitter** — `on(event, callback)`, `emit(event, data)`, `off(event, id)` |
+| [**D19 Fri**](days/day19-strategy-command.md) | Strategy & Command | Runtime-swappable algorithms, command encapsulation for undo/redo | Build a **text editor** with command pattern — `Type`, `Delete`, `undo()`, `redo()` |
+| [**D20 Sat**](days/day20-state-machine.md) | State Machine | States, transitions, guards, entry/exit actions | Build a **TCP connection state machine** — CLOSED, LISTEN, SYN_SENT, ESTABLISHED, etc. |
 | **D21 Sun** | **Weekly review** | Review all patterns, identify which ones you'd combine in a real system | **Mini-project**: A small plugin system using factory + observer + strategy together |
 
 **Key Deep-Dives:**
