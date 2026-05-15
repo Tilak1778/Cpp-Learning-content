@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Algorithm Decision Flowchart</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #fafaf8;
+    --surface: #ffffff;
+    --border: #e5e3db;
+    --border-strong: #d3d1c7;
+    --text: #1a1a1a;
+    --text-muted: #6b6a64;
+    --text-dim: #9a9892;
+    --accent: #2c2c2a;
+    --decision: #fff7e6;
+    --decision-border: #f5b800;
+    --decision-text: #7a5a00;
+    --pattern: #e8f4fd;
+    --pattern-border: #2b7cd3;
+    --pattern-text: #0c447c;
+    --algo: #e6f7ee;
+    --algo-border: #1d9e75;
+    --algo-text: #04342c;
+    --ds: #fef0e1;
+    --ds-border: #d97706;
+    --ds-text: #7c2d12;
+    --dp: #fce7f0;
+    --dp-border: #db2777;
+    --dp-text: #831843;
+    --terminal: #f5f5f3;
+    --terminal-border: #888780;
+    --terminal-text: #2c2c2a;
+    --edge: #b8b6ac;
+    --edge-active: #f5b800;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    z-index: 10;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  }
+  h1 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .subtitle { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
+  .controls { display: flex; align-items: center; gap: 8px; flex: 1; flex-wrap: wrap; }
+  input[type="text"] {
+    padding: 7px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    font-size: 13px;
+    width: 260px;
+    background: var(--surface);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(44,44,42,0.08);
+  }
+  button {
+    padding: 7px 14px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  button:hover { background: #f0efea; border-color: var(--text-dim); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #444441; }
+  .legend {
+    display: flex; gap: 14px;
+    font-size: 12px; color: var(--text-muted);
+    align-items: center; flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-shape {
+    width: 14px; height: 14px;
+    border: 1.5px solid;
+  }
+  .legend-shape.diamond { transform: rotate(45deg); width: 10px; height: 10px; }
+  .legend-shape.rect { border-radius: 4px; }
+
+  #canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle, #e5e3db 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  #canvas {
+    position: absolute;
+    top: 0; left: 0;
+    transform-origin: 0 0;
+    width: 4800px;
+    height: 4400px;
+  }
+  svg.edges {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  /* Node base */
+  .node {
+    position: absolute;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.15s, filter 0.2s, opacity 0.2s;
+  }
+  .node:hover { transform: translateY(-2px); filter: drop-shadow(0 6px 12px rgba(0,0,0,0.08)); }
+  .node.dim { opacity: 0.15; }
+  .node.highlight .node-body { box-shadow: 0 0 0 3px var(--edge-active), 0 8px 20px rgba(245,184,0,0.25); }
+
+  /* Decision node — diamond/rhombus look using rotated square + content overlay */
+  .node.decision {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .node.decision .node-body {
+    background: var(--decision);
+    border: 2px solid var(--decision-border);
+    color: var(--decision-text);
+    padding: 18px 22px;
+    border-radius: 6px;
+    text-align: center;
+    position: relative;
+    transform: skewX(-8deg);
+    box-shadow: 0 2px 6px rgba(245,184,0,0.1);
+  }
+  .node.decision .node-content { transform: skewX(8deg); }
+  .node.decision .node-title {
+    font-size: 13px; font-weight: 600;
+    color: var(--decision-text);
+    line-height: 1.3;
+  }
+  .node.decision .node-sub {
+    font-size: 11px; color: #a17a1a; margin-top: 3px;
+  }
+
+  /* Rectangle nodes for outcomes */
+  .node:not(.decision):not(.terminal) .node-body {
+    border-radius: 12px;
+    padding: 12px 16px;
+    border: 2px solid;
+    text-align: center;
+    background: var(--surface);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .node.pattern .node-body { background: var(--pattern); border-color: var(--pattern-border); }
+  .node.pattern .node-title { color: var(--pattern-text); }
+  .node.algo .node-body { background: var(--algo); border-color: var(--algo-border); }
+  .node.algo .node-title { color: var(--algo-text); }
+  .node.ds .node-body { background: var(--ds); border-color: var(--ds-border); }
+  .node.ds .node-title { color: var(--ds-text); }
+  .node.dp .node-body { background: var(--dp); border-color: var(--dp-border); }
+  .node.dp .node-title { color: var(--dp-text); }
+
+  .node.terminal .node-body {
+    background: var(--terminal);
+    border: 2px solid var(--terminal-border);
+    color: var(--terminal-text);
+    padding: 14px 28px;
+    border-radius: 999px;
+    text-align: center;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  }
+
+  .node-title { font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .node-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; line-height: 1.3; font-weight: 400; }
+  .node.pattern .node-sub { color: #1e5a8f; }
+  .node.algo .node-sub { color: #0a5c45; }
+  .node.ds .node-sub { color: #92400e; }
+  .node.dp .node-sub { color: #9d174d; }
+
+  /* Edge labels */
+  .edge { stroke: var(--edge); stroke-width: 2; fill: none; transition: stroke 0.2s, stroke-width 0.2s; }
+  .edge-label {
+    fill: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+  }
+  .edge-label-bg {
+    fill: var(--bg);
+    stroke: var(--border);
+    stroke-width: 1;
+    rx: 4;
+  }
+
+  /* Side panel */
+  #panel {
+    position: fixed;
+    right: 0; top: 64px; bottom: 0;
+    width: 400px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    box-shadow: -8px 0 24px rgba(0,0,0,0.06);
+    padding: 28px;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 20;
+  }
+  #panel.open { transform: translateX(0); }
+  #panel .close {
+    position: absolute;
+    top: 16px; right: 16px;
+    background: none; border: none; cursor: pointer;
+    font-size: 22px; color: var(--text-muted);
+    padding: 4px 10px; border-radius: 6px;
+    transition: background 0.15s;
+  }
+  #panel .close:hover { background: #f0efea; color: var(--text); }
+  #panel h2 {
+    font-size: 20px; font-weight: 600;
+    margin-bottom: 6px; padding-right: 40px;
+    letter-spacing: -0.01em;
+  }
+  #panel .cat-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  #panel section { margin-top: 20px; }
+  #panel h3 {
+    font-size: 12px; font-weight: 600;
+    margin-bottom: 8px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  #panel p { font-size: 14px; line-height: 1.65; color: var(--text); }
+  #panel ul { list-style: none; }
+  #panel li {
+    padding: 8px 12px;
+    background: #f7f7f5;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    font-size: 13px;
+    border-left: 3px solid var(--border-strong);
+  }
+  #panel .complexity {
+    font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    background: #f0efea;
+    padding: 5px 10px;
+    border-radius: 6px;
+    display: inline-block;
+    margin-right: 6px;
+    margin-bottom: 4px;
+    border: 1px solid var(--border);
+  }
+  #panel .keywords {
+    display: flex; flex-wrap: wrap; gap: 5px;
+  }
+  #panel .keyword {
+    font-size: 11px;
+    padding: 3px 8px;
+    background: #f0efea;
+    border-radius: 10px;
+    color: var(--text-muted);
+  }
+
+  /* Minimap */
+  #minimap {
+    position: absolute;
+    bottom: 16px; right: 16px;
+    width: 220px;
+    height: 160px;
+    background: rgba(255,255,255,0.96);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 5;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    cursor: pointer;
+  }
+  #minimap-viewport {
+    position: absolute;
+    border: 2px solid var(--accent);
+    background: rgba(44,44,42,0.08);
+    pointer-events: none;
+    border-radius: 2px;
+  }
+  .zoom-indicator {
+    position: absolute;
+    bottom: 16px; left: 16px;
+    background: rgba(255,255,255,0.96);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    z-index: 5;
+    font-weight: 500;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  }
+  .help {
+    position: absolute;
+    top: 16px; right: 16px;
+    background: rgba(255,255,255,0.96);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: var(--text-muted);
+    z-index: 5;
+    line-height: 1.6;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  }
+  kbd {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    background: #f0efea;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border-strong);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Algorithm Decision Flowchart <span class="subtitle">/ pick the right pattern</span></h1>
+  <div class="controls">
+    <input type="text" id="search" placeholder="Search nodes, problems, complexity…">
+    <button id="clear-search">Clear</button>
+    <button id="fit">Fit</button>
+    <button id="reset" class="primary">Reset view</button>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><span class="legend-shape diamond" style="background:var(--decision);border-color:var(--decision-border)"></span>Decision</div>
+    <div class="legend-item"><span class="legend-shape rect" style="background:var(--pattern);border-color:var(--pattern-border)"></span>Pattern</div>
+    <div class="legend-item"><span class="legend-shape rect" style="background:var(--algo);border-color:var(--algo-border)"></span>Algorithm</div>
+    <div class="legend-item"><span class="legend-shape rect" style="background:var(--ds);border-color:var(--ds-border)"></span>Data structure</div>
+    <div class="legend-item"><span class="legend-shape rect" style="background:var(--dp);border-color:var(--dp-border)"></span>DP</div>
+  </div>
+</header>
+
+<div id="canvas-wrap">
+  <div id="canvas">
+    <svg class="edges" id="edges" viewBox="0 0 4800 4400" preserveAspectRatio="none"></svg>
+  </div>
+  <div class="help">
+    <kbd>Drag</kbd> pan · <kbd>Scroll</kbd> zoom · <kbd>Click</kbd> node for details
+  </div>
+  <div class="zoom-indicator" id="zoom-ind">100%</div>
+  <div id="minimap">
+    <svg id="minimap-svg" width="220" height="160" viewBox="0 0 4800 4400" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="minimap-viewport"></div>
+  </div>
+</div>
+
+<div id="panel">
+  <button class="close" id="panel-close">×</button>
+  <h2 id="panel-title">—</h2>
+  <span class="cat-badge" id="panel-cat">—</span>
+  <section id="panel-when-section">
+    <h3>When to use</h3>
+    <p id="panel-when">—</p>
+  </section>
+  <section id="panel-keywords-section">
+    <h3>Problem keywords</h3>
+    <div class="keywords" id="panel-keywords"></div>
+  </section>
+  <section id="panel-complexity-section">
+    <h3>Complexity</h3>
+    <div id="panel-complexity"></div>
+  </section>
+  <section id="panel-template-section">
+    <h3>Template / idea</h3>
+    <p id="panel-template">—</p>
+  </section>
+  <section id="panel-tips-section">
+    <h3>Tips & pitfalls</h3>
+    <p id="panel-tips">—</p>
+  </section>
+  <section id="panel-examples-section">
+    <h3>Example problems</h3>
+    <ul id="panel-examples"></ul>
+  </section>
+</div>
+
+<script>
+/* =====================================================================
+   NODES
+   cat: decision | pattern | algo | ds | dp | terminal
+   Layout is top-down hierarchical, columns spaced ~280px apart.
+   ===================================================================== */
+
+const nodes = [
+  // ROW 0 — root
+  { id:'start', x:2300, y:40, w:200, h:54, cat:'terminal',
+    title:'Start',
+    when:'Read the problem carefully. Note: input data type, size, constraints, what the output must be, and whether ordering matters.',
+    tips:'Constraints whisper the algorithm. n ≤ 20 → exponential is fine. n ≤ 10^5 → O(n log n). n ≤ 10^9 → math, bitset, or O(log n).' },
+
+  // ROW 1 — primary classifier
+  { id:'q-input', x:2240, y:160, w:320, h:64, cat:'decision',
+    title:'What is the input?',
+    sub:'array · string · linked list · tree · graph · grid · intervals · number · stream · design',
+    when:'The shape of the input is the single strongest signal for which algorithm family you need.',
+    tips:'Multiple inputs? Pick the most constrained one and consider whether they need merging or comparison.' },
+
+  /* ============================================================
+     COLUMN A — ARRAY / STRING (left side, x ≈ 80..900)
+     ============================================================ */
+
+  // Array branch
+  { id:'q-array', x:200, y:320, w:200, h:56, cat:'decision', title:'Array or list',
+    sub:'Is it sorted?',
+    when:'Sorting unlocks O(log n) search, two-pointer reductions, and many greedy strategies. If the problem allows you to sort and n log n is acceptable, sorting first is often the right first move.',
+    keywords:['array','list','sorted','range','contiguous'] },
+
+  // Array → sorted / unsorted / can sort
+  { id:'q-array-search', x:60, y:460, w:200, h:64, cat:'decision', title:'Sorted',
+    sub:'Search a value, pair, or boundary?',
+    when:'Sorted data invites binary search variants and two-pointer techniques.' },
+  { id:'q-array-window', x:280, y:460, w:220, h:64, cat:'decision', title:'Unsorted',
+    sub:'Contiguous subarray with a property?',
+    when:'Continuous sums / character counts in a window? Variable or fixed length?' },
+
+  // Sorted leaves
+  { id:'p-bsearch',  x:40,  y:600, w:170, h:64, cat:'pattern', title:'Binary search',
+    sub:'Find target / boundary',
+    when:'Locate a target, leftmost / rightmost position, or any monotonic predicate on a sorted (or rotated sorted) array.',
+    template:'lo, hi = 0, n-1\nwhile lo <= hi:\n    mid = (lo+hi)//2\n    if ok(mid): hi = mid-1\n    else:        lo = mid+1\nreturn lo',
+    complexity:['Time: O(log n)','Space: O(1)'],
+    tips:'Off-by-one bugs come from inconsistent invariants. Pick one of: [lo, hi] inclusive OR [lo, hi) half-open — and stick with it.',
+    keywords:['sorted','search','find','rotated','find first','find last'],
+    examples:['Binary Search (LC 704)','First Bad Version (LC 278)','Find First and Last Position (LC 34)','Search in Rotated Sorted Array (LC 33)','Find Minimum in Rotated Sorted Array (LC 153)','Search a 2D Matrix (LC 74)','Find Peak Element (LC 162)','Sqrt(x) (LC 69)'] },
+  { id:'p-bsearch-ans', x:40, y:740, w:220, h:64, cat:'pattern', title:'Binary search on answer',
+    sub:'Min/max value with a feasibility check',
+    when:'You can check "is value v achievable?" in O(n), and want the smallest/largest v that works. The answer space is monotonic.',
+    template:'def feasible(v): ...  # O(n)\nlo, hi = min_val, max_val\nwhile lo < hi:\n    mid = (lo+hi)//2\n    if feasible(mid): hi = mid\n    else:             lo = mid+1\nreturn lo',
+    complexity:['Time: O(n · log(maxVal))'],
+    tips:'Identify the monotonic predicate first; the rest follows. The hardest part is usually framing feasibility.',
+    keywords:['minimum maximum','maximum minimum','smallest possible','largest possible','feasibility','capacity'],
+    examples:['Capacity To Ship Packages (LC 1011)','Koko Eating Bananas (LC 875)','Split Array Largest Sum (LC 410)','Find the Smallest Divisor (LC 1283)','Aggressive Cows','Magnetic Force Between Balls (LC 1552)','Minimum Time to Complete Trips (LC 2187)'] },
+
+  { id:'p-2ptr', x:230, y:600, w:170, h:64, cat:'pattern', title:'Two pointers',
+    sub:'Converging / parallel',
+    when:'Find pairs/triplets summing to a target in a sorted array, or partition in-place. Variants: opposite ends, both forward, fast/slow.',
+    template:'l, r = 0, n-1\nwhile l < r:\n    s = a[l] + a[r]\n    if s == target: return (l, r)\n    elif s < target: l += 1\n    else: r -= 1',
+    complexity:['Time: O(n)','Space: O(1)'],
+    tips:'After sorting, skip duplicates by advancing while a[i]==a[i-1]. For triplets, fix one index and two-pointer the rest.',
+    keywords:['pair','triplet','target sum','in place','partition','dutch flag','remove duplicates'],
+    examples:['Two Sum II (LC 167)','3Sum (LC 15)','3Sum Closest (LC 16)','4Sum (LC 18)','Container With Most Water (LC 11)','Trapping Rain Water (LC 42)','Remove Duplicates from Sorted Array (LC 26)','Sort Colors (LC 75)','Valid Palindrome (LC 125)'] },
+
+  // Unsorted / window leaves
+  { id:'p-window', x:280, y:600, w:220, h:64, cat:'pattern', title:'Sliding window',
+    sub:'Fixed or variable length',
+    when:'Find the longest/shortest contiguous subarray or substring satisfying a constraint (sum ≤ K, at most K distinct chars, etc.).',
+    template:'l = 0; best = 0\nfor r in range(n):\n    add a[r]\n    while window invalid:\n        remove a[l]; l += 1\n    best = max(best, r-l+1)',
+    complexity:['Time: O(n)','Space: O(window state)'],
+    tips:'Track window invariant with a counter or hashmap. For "at most K" subtract "at most K-1" to get "exactly K".',
+    keywords:['longest substring','shortest subarray','at most','at least','contiguous','window'],
+    examples:['Longest Substring Without Repeating Characters (LC 3)','Minimum Window Substring (LC 76)','Longest Repeating Character Replacement (LC 424)','Permutation in String (LC 567)','Find All Anagrams in a String (LC 438)','Fruit Into Baskets (LC 904)','Sliding Window Maximum (LC 239)','Subarrays with K Different Integers (LC 992)'] },
+  { id:'p-prefix', x:520, y:600, w:200, h:64, cat:'pattern', title:'Prefix sum',
+    sub:'Range queries / counting',
+    when:'Repeated range-sum queries, or "count subarrays with sum = K". Combine with hashmap for O(n) subarray counts.',
+    template:'pre = 0; count = 0; seen = {0: 1}\nfor x in arr:\n    pre += x\n    count += seen.get(pre - k, 0)\n    seen[pre] = seen.get(pre, 0) + 1',
+    complexity:['Build: O(n)','Range query: O(1)'],
+    tips:'For 2D, build a 2D prefix-sum table; query rectangles in O(1). For range updates, use difference array.',
+    keywords:['range sum','subarray sum','equal to k','range update','difference array'],
+    examples:['Range Sum Query — Immutable (LC 303)','Subarray Sum Equals K (LC 560)','Continuous Subarray Sum (LC 523)','Product of Array Except Self (LC 238)','Range Sum Query 2D (LC 304)','Contiguous Array (LC 525)'] },
+  { id:'p-kadane', x:520, y:740, w:200, h:64, cat:'algo', title:"Kadane's algorithm",
+    sub:'Max / min subarray sum',
+    when:'Maximum contiguous subarray sum (with negatives). Variants for products, circular arrays, K-concatenations.',
+    template:'best = cur = a[0]\nfor x in a[1:]:\n    cur = max(x, cur + x)\n    best = max(best, cur)',
+    complexity:['Time: O(n)','Space: O(1)'],
+    tips:'For max product, track both max and min ending here (negatives flip signs).',
+    keywords:['max subarray','contiguous sum','best subarray'],
+    examples:['Maximum Subarray (LC 53)','Maximum Product Subarray (LC 152)','Maximum Sum Circular Subarray (LC 918)','Best Time to Buy and Sell Stock (LC 121)','K-Concatenation Maximum Sum (LC 1191)'] },
+
+  // String branch
+  { id:'q-string', x:740, y:320, w:200, h:56, cat:'decision', title:'String',
+    sub:'What property?',
+    when:'Strings divide into pattern matching, palindromes, anagrams, and parsing problems. The verb in the question (find, count, match, transform) usually disambiguates.',
+    keywords:['string','characters','substring','palindrome','anagram'] },
+
+  { id:'p-anagram', x:740, y:460, w:200, h:64, cat:'pattern', title:'Char frequency',
+    sub:'Anagrams, hashing',
+    when:'Comparing multisets of characters. Counting occurrences. Detecting permutations.',
+    template:'def sig(s): return tuple(sorted(s))\n# or: Counter(s)\n# fixed alphabet → array[26]',
+    complexity:['Time: O(n)','Space: O(σ)'],
+    tips:'Sorted-string key works but is O(L log L). For lowercase ASCII, a length-26 tuple is a faster hash key.',
+    keywords:['anagram','permutation of','character count','frequency'],
+    examples:['Valid Anagram (LC 242)','Group Anagrams (LC 49)','Find All Anagrams in a String (LC 438)','Ransom Note (LC 383)','Word Pattern (LC 290)'] },
+  { id:'p-palindrome', x:740, y:600, w:200, h:64, cat:'pattern', title:'Expand around center',
+    sub:'Palindromic substrings',
+    when:'Count or find palindromic substrings. For O(n) use Manacher; otherwise expand from each center.',
+    template:'def expand(l, r):\n    while l>=0 and r<n and s[l]==s[r]:\n        l-=1; r+=1\n    return r-l-1\nfor i in range(n):\n    odd  = expand(i, i)\n    even = expand(i, i+1)',
+    complexity:['Time: O(n²) expand · O(n) Manacher','Space: O(1)'],
+    tips:"There are 2n-1 centers (n single + n-1 between-character). Don't forget the even-length case.",
+    keywords:['palindrome','symmetric','reverse equals'],
+    examples:['Longest Palindromic Substring (LC 5)','Palindromic Substrings (LC 647)','Valid Palindrome II (LC 680)','Shortest Palindrome (LC 214)'] },
+  { id:'a-manacher', x:520, y:600, w:200, h:64, cat:'algo', title:"Manacher's algorithm",
+    sub:'All palindromes in O(n)',
+    when:'You need linear-time palindrome detection — e.g. longest palindromic substring on very large strings.',
+    complexity:['Time: O(n)','Space: O(n)'],
+    tips:"Insert sentinels (e.g. '#') between chars to unify odd/even cases.",
+    examples:['Longest Palindromic Substring (LC 5) — optimal solution'] },
+  { id:'a-kmp', x:740, y:740, w:200, h:64, cat:'algo', title:'KMP / Z-algorithm',
+    sub:'Pattern matching in O(n+m)',
+    when:'Finding occurrences of a pattern in text. KMP is iterative with a failure (LPS) function; Z gives positions where a prefix matches.',
+    template:'# build LPS\nlps=[0]*m; k=0\nfor i in range(1,m):\n    while k and p[k]!=p[i]: k=lps[k-1]\n    if p[k]==p[i]: k+=1\n    lps[i]=k',
+    complexity:['Time: O(n + m)','Space: O(m)'],
+    tips:'LPS[i] = length of the longest proper prefix of p[..i] that is also a suffix.',
+    keywords:['pattern matching','strstr','substring search','repeated pattern'],
+    examples:['Implement strStr() (LC 28)','Shortest Palindrome (LC 214)','Repeated Substring Pattern (LC 459)','Longest Happy Prefix (LC 1392)'] },
+  { id:'a-rabin', x:740, y:880, w:200, h:64, cat:'algo', title:'Rabin-Karp',
+    sub:'Rolling hash matching',
+    when:'Multiple pattern search; checking if substrings repeat. Rolling hash also helps with sliding-window comparisons.',
+    complexity:['Time: O(n + m) avg, O(nm) worst'],
+    tips:'Use two hash bases to minimize collisions. Modulo a large prime.',
+    keywords:['rolling hash','hash matching','duplicate substring'],
+    examples:['Longest Duplicate Substring (LC 1044)','Repeated DNA Sequences (LC 187)','Distinct Echo Substrings (LC 1316)'] },
+  { id:'ds-trie', x:960, y:600, w:180, h:64, cat:'ds', title:'Trie',
+    sub:'Prefix tree',
+    when:'Many word lookups by prefix, autocomplete, word puzzles. Each node has a children map and a terminal flag.',
+    complexity:['Insert / search: O(L)','Space: O(Σ L)'],
+    tips:'For DFS on a board with a dictionary (Word Search II), the Trie prunes failed branches massively.',
+    keywords:['prefix','autocomplete','dictionary','word list'],
+    examples:['Implement Trie (LC 208)','Add and Search Word (LC 211)','Word Search II (LC 212)','Replace Words (LC 648)','Maximum XOR of Two Numbers (LC 421)','Stream of Characters (LC 1032)'] },
+  { id:'ds-suffix', x:960, y:740, w:200, h:64, cat:'ds', title:'Suffix array / automaton',
+    sub:'Advanced string indexing',
+    when:'Heavy substring queries on a fixed string: counting distinct substrings, longest repeated substring, LCS of multiple strings.',
+    complexity:['Build: O(n log n) or O(n)','Query: O(log n)'],
+    tips:"For interviews this is rare; KMP/Z and Trie cover 90% of cases.",
+    examples:['Longest Common Substring','Number of Distinct Substrings'] },
+
+  /* ============================================================
+     COLUMN B — LINKED LIST (x ≈ 1180..1380)
+     ============================================================ */
+  { id:'q-linked', x:1180, y:320, w:200, h:56, cat:'decision', title:'Linked list',
+    sub:'What operation?',
+    when:'Pointer manipulation is the core skill. Always handle null and single-node edge cases.',
+    keywords:['linked list','node','next pointer'] },
+  { id:'p-fastslow', x:1180, y:460, w:200, h:64, cat:'pattern', title:"Floyd's tortoise & hare",
+    sub:'Cycle / middle / kth-from-end',
+    when:'Detect cycle, find cycle entry, find middle, find kth from end without knowing length.',
+    template:'slow = fast = head\nwhile fast and fast.next:\n    slow = slow.next\n    fast = fast.next.next\n    if slow == fast: return True  # cycle',
+    complexity:['Time: O(n)','Space: O(1)'],
+    tips:'For cycle start: after meeting, move one pointer to head; both step 1 — they meet at entry.',
+    keywords:['cycle','middle','find loop','kth from end','happy number'],
+    examples:['Linked List Cycle (LC 141)','Linked List Cycle II (LC 142)','Middle of the Linked List (LC 876)','Happy Number (LC 202)','Palindrome Linked List (LC 234)','Find the Duplicate Number (LC 287)'] },
+  { id:'p-reverse-ll', x:1180, y:600, w:200, h:64, cat:'pattern', title:'In-place reversal',
+    sub:'Reverse list / sublist',
+    when:'Reverse whole list, a sublist between positions, or in groups of K.',
+    template:'prev = None; curr = head\nwhile curr:\n    nxt = curr.next\n    curr.next = prev\n    prev = curr; curr = nxt\nreturn prev',
+    complexity:['Time: O(n)','Space: O(1)'],
+    tips:'Always use a dummy head when the head node might change. Three-pointer dance: prev, curr, next.',
+    keywords:['reverse','rotate','swap nodes'],
+    examples:['Reverse Linked List (LC 206)','Reverse Linked List II (LC 92)','Reverse Nodes in k-Group (LC 25)','Swap Nodes in Pairs (LC 24)','Rotate List (LC 61)','Odd Even Linked List (LC 328)'] },
+  { id:'p-merge-ll', x:1180, y:740, w:200, h:64, cat:'pattern', title:'Merge / split',
+    sub:'Two sorted lists, k lists',
+    when:'Merge two sorted lists, merge K sorted lists, split a list, add two numbers represented as lists.',
+    complexity:['Two lists: O(n+m)','K lists: O(N log K)'],
+    tips:'For K lists, push (val, list_id, node) into a min-heap. Carry-over for arithmetic lists.',
+    keywords:['merge','combine','sorted lists'],
+    examples:['Merge Two Sorted Lists (LC 21)','Merge k Sorted Lists (LC 23)','Add Two Numbers (LC 2)','Sort List (LC 148)','Partition List (LC 86)'] },
+
+  /* ============================================================
+     COLUMN C — TREE (x ≈ 1500..1800)
+     ============================================================ */
+  { id:'q-tree', x:1500, y:320, w:200, h:56, cat:'decision', title:'Tree',
+    sub:'Traversal, search, or DP?',
+    when:'Recursion is the default hammer. The trick is choosing what each call returns.',
+    keywords:['tree','binary tree','BST','root','leaf'] },
+  { id:'p-bfs-tree', x:1420, y:460, w:200, h:64, cat:'pattern', title:'BFS (level order)',
+    sub:'Queue, level-by-level',
+    when:'Information by level: level sums, right view, zig-zag, min depth, connect next-right.',
+    template:'q = deque([root])\nwhile q:\n    size = len(q)\n    for _ in range(size):\n        node = q.popleft()\n        ...\n        if node.left:  q.append(node.left)\n        if node.right: q.append(node.right)',
+    complexity:['Time: O(n)','Space: O(w)'],
+    tips:'Capture level size BEFORE the inner loop. This is the most common BFS bug.',
+    keywords:['level order','right view','min depth','zigzag','width'],
+    examples:['Binary Tree Level Order Traversal (LC 102)','Binary Tree Right Side View (LC 199)','Binary Tree Zigzag (LC 103)','Minimum Depth (LC 111)','Populating Next Right Pointers (LC 116)','Average of Levels (LC 637)'] },
+  { id:'p-dfs-tree', x:1640, y:460, w:200, h:64, cat:'pattern', title:'DFS recursion',
+    sub:'Pre / in / post-order',
+    when:'Most tree problems. Decide what each recursive call returns and how parents combine children.',
+    template:'def dfs(node):\n    if not node: return base_case\n    L = dfs(node.left)\n    R = dfs(node.right)\n    return combine(node.val, L, R)',
+    complexity:['Time: O(n)','Space: O(h)'],
+    tips:'Postorder (process children first) handles most subtree-aggregate problems. Inorder of BST is sorted.',
+    keywords:['traversal','depth','path','subtree'],
+    examples:['Maximum Depth (LC 104)','Diameter of Binary Tree (LC 543)','Path Sum (LC 112, 113)','Same Tree (LC 100)','Invert Binary Tree (LC 226)','Validate BST (LC 98)','Lowest Common Ancestor (LC 236)','Symmetric Tree (LC 101)','Binary Tree Maximum Path Sum (LC 124)'] },
+  { id:'p-tree-dp', x:1420, y:600, w:200, h:64, cat:'dp', title:'Tree DP',
+    sub:'Postorder aggregation',
+    when:'Optimization over subtrees — typically a postorder where each node returns multiple values (e.g. (with, without)).',
+    template:'def dfs(node):\n    if not node: return (0, 0)\n    L = dfs(node.left); R = dfs(node.right)\n    take  = node.val + L[1] + R[1]\n    skip  = max(L) + max(R)\n    return (take, skip)',
+    complexity:['Time: O(n)'],
+    tips:"Return a small tuple; don't store DP separately. Often: (take_this, skip_this).",
+    keywords:['rob houses','subtree sum','tree path','reroot'],
+    examples:['House Robber III (LC 337)','Binary Tree Maximum Path Sum (LC 124)','Longest Univalue Path (LC 687)','Diameter (LC 543)','Sum of Distances in Tree (LC 834)'] },
+  { id:'p-bst', x:1640, y:600, w:200, h:64, cat:'pattern', title:'BST property',
+    sub:'In-order = sorted',
+    when:"Anything labeled BST: search, insert, delete, kth element, validate. Inorder gives sorted sequence.",
+    complexity:['Avg: O(log n)','Worst (skewed): O(n)'],
+    tips:'For balanced guarantees, use AVL / Red-Black / Treap. In interviews, mention it but rarely implement.',
+    keywords:['BST','search tree','kth smallest','inorder successor'],
+    examples:['Validate BST (LC 98)','Kth Smallest Element in BST (LC 230)','Lowest Common Ancestor of BST (LC 235)','Convert Sorted Array to BST (LC 108)','Recover BST (LC 99)','Delete Node in BST (LC 450)'] },
+  { id:'ds-segtree', x:1420, y:740, w:200, h:64, cat:'ds', title:'Segment tree',
+    sub:'Range query + point update',
+    when:'Many range queries (sum, min, max, gcd) interleaved with updates. Lazy propagation handles range updates.',
+    complexity:['Build: O(n)','Query / update: O(log n)'],
+    tips:'Lazy propagation: defer updates to children until needed. Easy to get wrong; write a clean abstraction.',
+    keywords:['range query','range update','range max','range min'],
+    examples:['Range Sum Query — Mutable (LC 307)','Count of Smaller Numbers After Self (LC 315)','Reverse Pairs (LC 493)','Falling Squares (LC 699)'] },
+  { id:'ds-bit', x:1640, y:740, w:200, h:64, cat:'ds', title:'Fenwick tree (BIT)',
+    sub:'Prefix-sum with updates',
+    when:'Same domain as segment tree but only for prefix-style operations. Shorter and faster constant factor.',
+    complexity:['Update / query: O(log n)'],
+    tips:'`i & -i` isolates the lowest set bit — the engine of BIT.',
+    keywords:['prefix sum','dynamic','inversions count'],
+    examples:['Count of Smaller Numbers After Self (LC 315)','Number of Longest Increasing Subsequence (LC 673)','Range Sum Query — Mutable (LC 307)'] },
+
+  /* ============================================================
+     COLUMN D — GRAPH (x ≈ 1960..2680)
+     ============================================================ */
+  { id:'q-graph', x:1960, y:320, w:220, h:56, cat:'decision', title:'Graph',
+    sub:'Directed? Weighted? Cyclic?',
+    when:'These three flags pick the algorithm. Connectivity → DFS/Union-Find. Shortest path → BFS/Dijkstra/Bellman-Ford. DAG → topological sort.',
+    keywords:['graph','nodes edges','adjacency','directed','weighted'] },
+  { id:'p-bfs-graph', x:1900, y:460, w:200, h:64, cat:'algo', title:'BFS',
+    sub:'Shortest path (unweighted)',
+    when:'Shortest number of edges from source — also level traversal, word ladders, multi-source spreads.',
+    template:'q = deque([src]); dist = {src: 0}\nwhile q:\n    u = q.popleft()\n    for v in adj[u]:\n        if v not in dist:\n            dist[v] = dist[u] + 1\n            q.append(v)',
+    complexity:['Time: O(V + E)','Space: O(V)'],
+    tips:'Mark visited when ENQUEUING, not dequeuing — else duplicates explode.',
+    keywords:['shortest path','unweighted','BFS','level'],
+    examples:['Number of Islands (LC 200)','Rotting Oranges (LC 994)','Word Ladder (LC 127)','Open the Lock (LC 752)','Walls and Gates (LC 286)','Shortest Path in Binary Matrix (LC 1091)','01 Matrix (LC 542)','Snakes and Ladders (LC 909)'] },
+  { id:'p-dfs-graph', x:2120, y:460, w:200, h:64, cat:'algo', title:'DFS',
+    sub:'Connectivity, components',
+    when:'Connected components, path existence, flood-fill, detecting cycles (with color marks).',
+    template:'def dfs(u):\n    color[u] = GRAY\n    for v in adj[u]:\n        if color[v] == GRAY: return False  # cycle\n        if color[v] == WHITE and not dfs(v): return False\n    color[u] = BLACK; return True',
+    complexity:['Time: O(V + E)','Space: O(V)'],
+    tips:'Iterative DFS with explicit stack avoids recursion limits on big graphs.',
+    keywords:['component','cycle detection','flood fill','path exists'],
+    examples:['Number of Islands (LC 200)','Course Schedule (LC 207)','Clone Graph (LC 133)','Pacific Atlantic Water Flow (LC 417)','Surrounded Regions (LC 130)','Keys and Rooms (LC 841)','Reconstruct Itinerary (LC 332)'] },
+  { id:'a-topo', x:2340, y:460, w:200, h:64, cat:'algo', title:'Topological sort',
+    sub:'DAG linear order',
+    when:'Tasks with prerequisites; alien dictionary order; build order. Detects cycles as a side effect.',
+    template:"# Kahn's BFS\nindeg = [0]*n\nfor u,v in edges: indeg[v]+=1\nq = deque([u for u in range(n) if indeg[u]==0])\nout=[]\nwhile q:\n    u=q.popleft(); out.append(u)\n    for v in adj[u]:\n        indeg[v]-=1\n        if indeg[v]==0: q.append(v)",
+    complexity:['Time: O(V + E)'],
+    tips:"If len(out) < V, there's a cycle.",
+    keywords:['prerequisite','course order','dag','dependency'],
+    examples:['Course Schedule I/II (LC 207, 210)','Alien Dictionary (LC 269)','Parallel Courses (LC 1136)','Sequence Reconstruction (LC 444)','Sort Items by Groups (LC 1203)'] },
+  { id:'a-dijkstra', x:2560, y:460, w:200, h:64, cat:'algo', title:'Dijkstra',
+    sub:'Shortest path, weights ≥ 0',
+    when:'Single-source shortest path on a non-negatively weighted graph.',
+    template:'pq = [(0, src)]; dist={src:0}\nwhile pq:\n    d, u = heappop(pq)\n    if d > dist[u]: continue\n    for v, w in adj[u]:\n        nd = d + w\n        if nd < dist.get(v, INF):\n            dist[v] = nd; heappush(pq, (nd, v))',
+    complexity:['Time: O((V+E) log V)'],
+    tips:'Use a min-heap; skip stale entries (the if d > dist[u] guard).',
+    keywords:['shortest path','weighted','non-negative','minimum cost'],
+    examples:['Network Delay Time (LC 743)','Path With Minimum Effort (LC 1631)','Cheapest Flights Within K Stops (LC 787)','Swim in Rising Water (LC 778)','The Maze II (LC 505)'] },
+  { id:'a-bellman', x:1900, y:600, w:200, h:64, cat:'algo', title:'Bellman-Ford',
+    sub:'Negative edges allowed',
+    when:'Shortest path with possibly negative edges; or detecting negative cycles. Also for "at most K edges" constraints.',
+    complexity:['Time: O(V · E)'],
+    tips:'Relax all edges V-1 times. A V-th relaxation that still improves → negative cycle.',
+    keywords:['negative weight','negative cycle','currency arbitrage','k edges'],
+    examples:['Cheapest Flights Within K Stops (LC 787)','Currency Arbitrage'] },
+  { id:'a-spfa', x:2120, y:600, w:200, h:64, cat:'algo', title:'SPFA / 0-1 BFS',
+    sub:'Specialized shortest path',
+    when:'0-1 BFS: edge weights are only 0 or 1, use deque (push front for 0, back for 1). SPFA: Bellman-Ford with a queue, faster in practice.',
+    complexity:['0-1 BFS: O(V + E)'],
+    keywords:['0-1 weights','deque','minimum modifications'],
+    examples:['Minimum Obstacle Removal (LC 2290)','Minimum Cost to Make Path (LC 1368)'] },
+  { id:'a-floyd', x:2340, y:600, w:200, h:64, cat:'algo', title:'Floyd-Warshall',
+    sub:'All-pairs shortest paths',
+    when:'You need shortest paths between every pair of nodes. Small graphs (V ≤ ~400).',
+    template:'for k in range(V):\n    for i in range(V):\n        for j in range(V):\n            d[i][j] = min(d[i][j], d[i][k]+d[k][j])',
+    complexity:['Time: O(V³)','Space: O(V²)'],
+    keywords:['all pairs','transitive closure'],
+    examples:['Find the City With Smallest Number of Neighbors (LC 1334)','Course Schedule IV (LC 1462)'] },
+  { id:'a-mst', x:2560, y:600, w:200, h:64, cat:'algo', title:"Kruskal / Prim",
+    sub:'Minimum spanning tree',
+    when:'Connect all nodes with minimum total edge weight.',
+    template:"# Kruskal: sort edges asc, union-find\nedges.sort(key=lambda e: e[2])\nfor u,v,w in edges:\n    if find(u)!=find(v): union(u,v); total+=w",
+    complexity:['Kruskal: O(E log E)','Prim: O(E log V)'],
+    tips:'Kruskal is shorter and more flexible. Prim is better for dense graphs.',
+    keywords:['MST','minimum cost','connect all','spanning'],
+    examples:['Min Cost to Connect All Points (LC 1584)','Optimize Water Distribution (LC 1168)','Connecting Cities With Minimum Cost (LC 1135)'] },
+  { id:'ds-union', x:1900, y:740, w:200, h:64, cat:'ds', title:'Union-Find (DSU)',
+    sub:'Disjoint sets',
+    when:'Connectivity over time. Merging groups. Detecting cycles in an undirected graph. Offline queries.',
+    template:'def find(x):\n    while p[x] != x:\n        p[x] = p[p[x]]  # path compression\n        x = p[x]\n    return x\ndef union(a,b):\n    ra, rb = find(a), find(b)\n    if ra == rb: return False\n    if rank[ra] < rank[rb]: ra, rb = rb, ra\n    p[rb] = ra\n    if rank[ra] == rank[rb]: rank[ra]+=1\n    return True',
+    complexity:['Op: ~O(α(n))'],
+    tips:'Path compression + union by rank/size → effectively constant time.',
+    keywords:['connected','merge','groups','provinces','equations'],
+    examples:['Number of Provinces (LC 547)','Redundant Connection (LC 684)','Accounts Merge (LC 721)','Most Stones Removed (LC 947)','Satisfiability of Equality Equations (LC 990)','Number of Islands II (LC 305)'] },
+  { id:'a-tarjan', x:2120, y:740, w:200, h:64, cat:'algo', title:'Tarjan / Kosaraju',
+    sub:'SCC, bridges, articulation',
+    when:'Strongly connected components in directed graphs; bridges / articulation points in undirected ones.',
+    complexity:['Time: O(V + E)'],
+    tips:'Track discovery time `disc` and `low` link. Bridge: low[v] > disc[u].',
+    keywords:['SCC','bridge','articulation','cut vertex'],
+    examples:['Critical Connections in a Network (LC 1192)','Strongly Connected Components'] },
+  { id:'a-astar', x:2340, y:740, w:200, h:64, cat:'algo', title:'A* search',
+    sub:'Heuristic shortest path',
+    when:"You have an admissible heuristic (never overestimates) — sliding puzzles, pathfinding on maps.",
+    complexity:['Depends on heuristic'],
+    tips:'Open set is a min-heap by f = g + h. A* with h=0 is Dijkstra.',
+    keywords:['heuristic','pathfinding','puzzle','manhattan'],
+    examples:['Sliding Puzzle (LC 773)','Shortest Path in Binary Matrix (LC 1091, with heuristic)'] },
+  { id:'a-flow', x:2560, y:740, w:200, h:64, cat:'algo', title:'Max flow / bipartite match',
+    sub:'Edmonds-Karp, Hopcroft-Karp',
+    when:'Assignment problems, bipartite matching, project selection, max flow source → sink.',
+    complexity:['Edmonds-Karp: O(V·E²)','Hopcroft-Karp: O(E·√V)'],
+    tips:'Many "match X to Y under constraints" problems reduce to max flow with clever modeling.',
+    keywords:['matching','assignment','flow','cut'],
+    examples:['Maximum Students Taking Exam (LC 1349)','Bipartite Matching','Min Cost Flow'] },
+  { id:'a-bipartite', x:1900, y:880, w:200, h:64, cat:'algo', title:'Bipartite check',
+    sub:'2-coloring (BFS/DFS)',
+    when:'Determine if a graph is bipartite — also "can split into two groups with no internal conflicts".',
+    complexity:['Time: O(V + E)'],
+    keywords:['bipartite','two groups','possible'],
+    examples:['Is Graph Bipartite? (LC 785)','Possible Bipartition (LC 886)'] },
+  { id:'a-eulerian', x:2120, y:880, w:200, h:64, cat:'algo', title:"Eulerian path (Hierholzer)",
+    sub:'Use every edge once',
+    when:'Reconstruct an itinerary using every edge exactly once.',
+    complexity:['Time: O(E)'],
+    keywords:['itinerary','use all edges','euler tour'],
+    examples:['Reconstruct Itinerary (LC 332)','Valid Arrangement of Pairs (LC 2097)'] },
+
+  /* ============================================================
+     COLUMN E — GRID / MATRIX (x ≈ 2800..3100)
+     ============================================================ */
+  { id:'q-grid', x:2820, y:320, w:200, h:56, cat:'decision', title:'2D grid / matrix',
+    sub:'Traversal or DP?',
+    when:'Grids are graphs where each cell connects to its neighbors. The verb tells you which.',
+    keywords:['grid','matrix','2d','board'] },
+  { id:'p-grid-bfs', x:2820, y:460, w:200, h:64, cat:'pattern', title:'BFS/DFS on grid',
+    sub:'4 or 8 directions',
+    when:'Flood fill, islands, shortest steps, region detection.',
+    template:'DIRS=[(0,1),(1,0),(0,-1),(-1,0)]\ndef dfs(r,c):\n    if not (0<=r<R and 0<=c<C and grid[r][c]==1): return\n    grid[r][c] = 2  # mark visited\n    for dr,dc in DIRS: dfs(r+dr, c+dc)',
+    complexity:['Time: O(R·C)'],
+    tips:'Mutate the grid as the visited marker when allowed — saves space. For shortest path use BFS, not DFS.',
+    keywords:['island','flood fill','region','grid path'],
+    examples:['Number of Islands (LC 200)','Max Area of Island (LC 695)','Pacific Atlantic Water Flow (LC 417)','Surrounded Regions (LC 130)','Walls and Gates (LC 286)','Word Search (LC 79)','Shortest Bridge (LC 934)'] },
+  { id:'p-grid-dp', x:3040, y:460, w:200, h:64, cat:'dp', title:'2D DP on grid',
+    sub:'Path / count / value',
+    when:'Number of paths, min path sum, edit distance — anything where dp[i][j] depends on neighbors.',
+    template:'dp = [[0]*C for _ in range(R)]\ndp[0][0] = grid[0][0]\nfor i in range(R):\n    for j in range(C):\n        if i==0 and j==0: continue\n        a = dp[i-1][j] if i else INF\n        b = dp[i][j-1] if j else INF\n        dp[i][j] = grid[i][j] + min(a, b)',
+    complexity:['Time: O(R·C)'],
+    keywords:['unique paths','min path sum','grid dp'],
+    examples:['Unique Paths (LC 62, 63)','Minimum Path Sum (LC 64)','Maximal Square (LC 221)','Dungeon Game (LC 174)','Cherry Pickup (LC 741)','Minimum Falling Path Sum (LC 931)'] },
+
+  /* ============================================================
+     COLUMN F — INTERVALS (x ≈ 3260..3500)
+     ============================================================ */
+  { id:'q-intervals', x:3280, y:320, w:220, h:56, cat:'decision', title:'Intervals / events',
+    sub:'Merge, schedule, count?',
+    when:'Anything with start/end pairs: meetings, ranges, time windows. Sort first.',
+    keywords:['interval','range','meeting','schedule','event'] },
+  { id:'p-int-sort', x:3260, y:460, w:200, h:64, cat:'pattern', title:'Sort + sweep',
+    sub:'Merging, overlaps',
+    when:'Merge overlapping intervals; insert an interval; check overlap; count non-overlapping.',
+    template:'intervals.sort()\nout = [intervals[0]]\nfor s,e in intervals[1:]:\n    if s <= out[-1][1]: out[-1][1] = max(out[-1][1], e)\n    else: out.append([s, e])',
+    complexity:['Time: O(n log n)'],
+    keywords:['merge intervals','insert interval','overlap'],
+    examples:['Merge Intervals (LC 56)','Insert Interval (LC 57)','Non-overlapping Intervals (LC 435)','Minimum Arrows (LC 452)','Car Pooling (LC 1094)','Interval List Intersections (LC 986)'] },
+  { id:'p-int-heap', x:3260, y:600, w:200, h:64, cat:'pattern', title:'Heap on intervals',
+    sub:'Resource scheduling',
+    when:'Sort by start; min-heap on end times. Track concurrent intervals.',
+    complexity:['Time: O(n log n)'],
+    keywords:['meeting rooms','rooms required','overlap count'],
+    examples:['Meeting Rooms II (LC 253)','Employee Free Time (LC 759)','Minimum Interval to Include Each Query (LC 1851)'] },
+  { id:'p-int-sweep', x:3260, y:740, w:200, h:64, cat:'pattern', title:'Sweep line / difference',
+    sub:'Events at boundaries',
+    when:"Add +1 at start, -1 at end+1. Sweep left to right; cumulative count is active intervals.",
+    complexity:['Time: O(n log n)'],
+    keywords:['sweep','events','active count','skyline'],
+    examples:['The Skyline Problem (LC 218)','Car Pooling (LC 1094)','Meeting Rooms II (LC 253)','My Calendar III (LC 732)'] },
+
+  /* ============================================================
+     COLUMN G — NUMBER (x ≈ 3640..3940)
+     ============================================================ */
+  { id:'q-num', x:3640, y:320, w:200, h:56, cat:'decision', title:'Single number / math',
+    sub:'Compute / count / search',
+    when:'Often math, bit manipulation, or DP on the value. Check the size: 32 bit? Modular?',
+    keywords:['integer','math','number','digits','base'] },
+  { id:'p-math', x:3640, y:460, w:200, h:64, cat:'pattern', title:'Math / number theory',
+    sub:'GCD, primes, modular',
+    when:'Closed-form, divisibility, prime factorization, modular arithmetic.',
+    complexity:['gcd: O(log min(a,b))','sieve: O(n log log n)'],
+    tips:'Watch for overflow. Use pow(a, b, MOD) in Python; explicit modular inverse via Fermat for division.',
+    keywords:['gcd','lcm','prime','modular','combinatorics'],
+    examples:['Pow(x, n) (LC 50)','Excel Sheet Column Title (LC 168)','Count Primes (LC 204)','Sqrt(x) (LC 69)','Happy Number (LC 202)','Fraction to Recurring Decimal (LC 166)','Sum of Two Integers (LC 371)'] },
+  { id:'p-bit', x:3640, y:600, w:200, h:64, cat:'pattern', title:'Bit manipulation',
+    sub:'XOR, masks, tricks',
+    when:'Powers of two; "find the unique"; subset enumeration on n ≤ ~20.',
+    template:'# x & (x-1) clears lowest set bit\nwhile x:\n    x &= x-1; count += 1\n\n# enumerate subsets of mask m\ns = m\nwhile s > 0:\n    process(s); s = (s-1) & m',
+    complexity:['Time: O(n) or O(2ⁿ)'],
+    keywords:['xor','bitmask','single number','subsets enumerate'],
+    examples:['Single Number I/II/III (LC 136, 137, 260)','Counting Bits (LC 338)','Subsets (LC 78)','Hamming Distance (LC 461)','Reverse Bits (LC 190)','Number of 1 Bits (LC 191)'] },
+  { id:'dp-bitmask', x:3640, y:740, w:200, h:64, cat:'dp', title:'Bitmask DP',
+    sub:'State = which subset used',
+    when:'Small universe (n ≤ ~20). State encodes which elements have been picked.',
+    template:'dp = [INF]*(1<<n); dp[0] = 0\nfor mask in range(1<<n):\n    for i in range(n):\n        if not (mask >> i) & 1: continue\n        prev = mask ^ (1<<i)\n        dp[mask] = min(dp[mask], dp[prev] + cost(prev, i))',
+    complexity:['Time: O(2ⁿ · n)','Space: O(2ⁿ)'],
+    keywords:['tsp','assignment','small n','subset dp'],
+    examples:['Traveling Salesman','Partition to K Equal Sum Subsets (LC 698)','Shortest Path Visiting All Nodes (LC 847)','Minimum Cost to Connect Two Groups (LC 1595)','Smallest Sufficient Team (LC 1125)'] },
+
+  /* ============================================================
+     COLUMN H — GAME / DESIGN / STREAM (x ≈ 4000..4280)
+     ============================================================ */
+  { id:'q-game', x:4000, y:320, w:200, h:56, cat:'decision', title:'Two-player game',
+    sub:'Optimal play',
+    when:'Players alternate optimal moves. Use minimax / game DP.',
+    keywords:['game','two players','win','optimal'] },
+  { id:'p-minimax', x:4000, y:460, w:200, h:64, cat:'dp', title:'Minimax / game DP',
+    sub:'Memoize states',
+    when:'Two-player perfect-information games. dp[state] = best outcome for the player to move.',
+    template:'@cache\ndef dp(state):\n    if terminal(state): return value(state)\n    return max(-dp(next_state) for next_state in moves(state))',
+    complexity:['Time: O(states · branching)'],
+    keywords:['minimax','game','optimal','win lose'],
+    examples:['Predict the Winner (LC 486)','Stone Game I-IX','Nim Game (LC 292)','Can I Win (LC 464)','Cat and Mouse (LC 913)'] },
+
+  { id:'q-stream', x:4220, y:320, w:220, h:56, cat:'decision', title:'Stream / online',
+    sub:'Data arrives over time',
+    when:'You see elements one at a time and must answer queries as they come.',
+    keywords:['stream','online','dynamic','running'] },
+  { id:'p-heap', x:4220, y:460, w:200, h:64, cat:'ds', title:'Heap / priority queue',
+    sub:'Top K, scheduling, median',
+    when:'Top K elements, K-way merge, median from stream (two heaps), task scheduling.',
+    template:'# top K largest with min-heap of size K\nh = []\nfor x in stream:\n    heappush(h, x)\n    if len(h) > k: heappop(h)\n# h contains the K largest',
+    complexity:['push/pop: O(log n)','top: O(1)'],
+    tips:'Min-heap of size K → K largest. For medians: max-heap (low half) + min-heap (high half), balance sizes.',
+    keywords:['top k','k largest','k smallest','median','priority'],
+    examples:['Kth Largest Element (LC 215)','Top K Frequent (LC 347)','Merge k Sorted Lists (LC 23)','Find Median from Data Stream (LC 295)','Task Scheduler (LC 621)','Sort Characters By Frequency (LC 451)','Reorganize String (LC 767)'] },
+  { id:'p-reservoir', x:4220, y:600, w:220, h:64, cat:'pattern', title:'Reservoir sampling',
+    sub:'Random pick from stream',
+    when:'Pick K random elements from a stream of unknown length, each with equal probability.',
+    template:'res = []; n = 0\nfor x in stream:\n    n += 1\n    if len(res) < k: res.append(x)\n    else:\n        j = random.randrange(n)\n        if j < k: res[j] = x',
+    complexity:['Time: O(n)','Space: O(k)'],
+    keywords:['random','sample','stream','equal probability'],
+    examples:['Random Pick Index (LC 398)','Linked List Random Node (LC 382)'] },
+
+  { id:'q-design', x:4440, y:320, w:200, h:56, cat:'decision', title:'Design a data structure',
+    sub:'Implement a class',
+    when:'You need a class with specific operations and complexity targets.',
+    keywords:['design','implement','class','cache'] },
+  { id:'p-design', x:4440, y:460, w:200, h:64, cat:'ds', title:'Combine primitives',
+    sub:'Hash + heap / hash + DLL',
+    when:'When O(1) is required for ops that no single structure offers alone.',
+    tips:'LRU = hashmap + doubly-linked list. LFU adds a frequency map of lists. Snapshot = sorted history.',
+    keywords:['LRU','LFU','O(1)','design'],
+    examples:['LRU Cache (LC 146)','LFU Cache (LC 460)','All O(1) Data Structure (LC 432)','Insert Delete GetRandom O(1) (LC 380)','Time Based Key-Value Store (LC 981)','Design Twitter (LC 355)','Design Phone Directory (LC 379)'] },
+
+  /* ============================================================
+     ROW 2.5 — COMMON CROSS-CUTTING PATTERNS (x ≈ 600..3700, y ≈ 1100)
+     ============================================================ */
+  { id:'q-general', x:2240, y:1080, w:320, h:64, cat:'decision', title:'Still unsure?',
+    sub:'Look at the structure of the answer',
+    when:'When input type alone doesn\'t pinpoint a pattern, focus on the answer shape: optimum, count, all combinations, yes/no.' },
+
+  { id:'p-greedy', x:1500, y:1240, w:200, h:64, cat:'pattern', title:'Greedy',
+    sub:'Local choice → global optimum',
+    when:'When there\'s a provable exchange argument or natural ordering that makes locally-best choices safe.',
+    complexity:['Often O(n log n) due to sort'],
+    tips:"Always prove or stress-test. The wrong greedy is the most common 'almost-correct' answer.",
+    keywords:['greedy','minimum number of','maximum number of','schedule'],
+    examples:['Jump Game (LC 55)','Jump Game II (LC 45)','Gas Station (LC 134)','Task Scheduler (LC 621)','Partition Labels (LC 763)','Minimum Number of Arrows (LC 452)','Candy (LC 135)','Wiggle Subsequence (LC 376)'] },
+  { id:'p-backtrack', x:1740, y:1240, w:200, h:64, cat:'pattern', title:'Backtracking',
+    sub:'Enumerate with pruning',
+    when:'Generate all valid configurations: subsets, permutations, combinations, paths, board placements.',
+    template:'def bt(path, choices):\n    if done(path): out.append(path[:]); return\n    for c in choices:\n        if not valid(path, c): continue\n        path.append(c)\n        bt(path, next_choices(choices, c))\n        path.pop()',
+    complexity:['~O(b^d) — prune aggressively'],
+    keywords:['all combinations','all permutations','find all','enumerate','arrangements'],
+    examples:['Subsets (LC 78, 90)','Permutations (LC 46, 47)','Combinations (LC 77)','Combination Sum (LC 39, 40)','N-Queens (LC 51, 52)','Sudoku Solver (LC 37)','Word Search (LC 79)','Restore IP Addresses (LC 93)','Letter Combinations of a Phone Number (LC 17)','Palindrome Partitioning (LC 131)'] },
+  { id:'p-divide', x:1980, y:1240, w:200, h:64, cat:'pattern', title:'Divide & conquer',
+    sub:'Split, solve, combine',
+    when:'Independent subproblems of the same shape combine into the answer. Master theorem estimates T(n).',
+    complexity:['Often O(n log n)'],
+    keywords:['divide','conquer','merge','split'],
+    examples:['Merge Sort','Quick Sort','Maximum Subarray (LC 53, D&C variant)','Different Ways to Add Parentheses (LC 241)','Count of Smaller Numbers After Self (LC 315)','Reverse Pairs (LC 493)'] },
+  { id:'p-monostack', x:2220, y:1240, w:200, h:64, cat:'pattern', title:'Monotonic stack/queue',
+    sub:'Next greater / smaller',
+    when:'For each element, find the next or previous greater/smaller. Daily temperatures, histogram, rain water.',
+    template:'st = []  # decreasing\nfor i, x in enumerate(a):\n    while st and a[st[-1]] < x:\n        idx = st.pop()\n        next_greater[idx] = i\n    st.append(i)',
+    complexity:['Time: O(n)'],
+    tips:'Push indices, not values. Decide increasing vs decreasing based on the question.',
+    keywords:['next greater','previous greater','histogram','span'],
+    examples:['Daily Temperatures (LC 739)','Next Greater Element I/II (LC 496, 503)','Largest Rectangle in Histogram (LC 84)','Maximal Rectangle (LC 85)','Trapping Rain Water (LC 42)','Sliding Window Maximum (LC 239)','Sum of Subarray Minimums (LC 907)'] },
+  { id:'p-mono-deque', x:2460, y:1240, w:200, h:64, cat:'pattern', title:'Monotonic deque',
+    sub:'Sliding window optima',
+    when:'Maintain max/min over a sliding window in O(n).',
+    complexity:['Time: O(n)'],
+    keywords:['sliding window max','sliding window min'],
+    examples:['Sliding Window Maximum (LC 239)','Constrained Subsequence Sum (LC 1425)','Jump Game VI (LC 1696)'] },
+  { id:'ds-hashmap', x:2700, y:1240, w:200, h:64, cat:'ds', title:'Hash map / set',
+    sub:'O(1) lookup',
+    when:'Counting, deduplication, complement (two-sum style), grouping.',
+    complexity:['Op: O(1) avg'],
+    tips:"When in doubt, try a hashmap. It's the most reliable Swiss army knife.",
+    keywords:['count','frequency','two sum','seen before','dedup'],
+    examples:['Two Sum (LC 1)','Group Anagrams (LC 49)','Longest Consecutive Sequence (LC 128)','Subarray Sum Equals K (LC 560)','Contains Duplicate (LC 217, 219)','Top K Frequent (LC 347)','LRU Cache (LC 146)'] },
+  { id:'ds-stack', x:2940, y:1240, w:200, h:64, cat:'ds', title:'Stack',
+    sub:'LIFO — match / parse / undo',
+    when:'Matching brackets, parsing expressions, undo, iterative DFS.',
+    keywords:['parentheses','brackets','parse','undo'],
+    examples:['Valid Parentheses (LC 20)','Min Stack (LC 155)','Evaluate Reverse Polish Notation (LC 150)','Decode String (LC 394)','Asteroid Collision (LC 735)','Simplify Path (LC 71)','Basic Calculator I/II/III (LC 224, 227, 772)'] },
+
+  /* ============================================================
+     DP MEGA-BRANCH (x ≈ 800..3800, y ≈ 1450..1900)
+     ============================================================ */
+  { id:'q-dp', x:2240, y:1450, w:320, h:64, cat:'decision', title:'Is it dynamic programming?',
+    sub:'Optimal substructure + overlapping subproblems',
+    when:'Hallmarks: ask for min/max/count of ways/longest/shortest. The problem decomposes into subproblems whose answers repeat.',
+    tips:'1) Define state. 2) Write recurrence. 3) Identify base cases. 4) Decide top-down (memo) vs bottom-up (table).' },
+
+  { id:'dp-1d', x:880, y:1600, w:180, h:64, cat:'dp', title:'1D DP',
+    sub:'dp[i] from dp[i-1], dp[i-2]…',
+    when:'A single index drives the state. Classic: climbing stairs, house robber, decode ways.',
+    template:'dp = [0]*n; dp[0] = base\nfor i in range(1, n):\n    dp[i] = combine(dp[i-1], dp[i-2], …)',
+    complexity:['Time: O(n)','Space: O(n) → often O(1)'],
+    keywords:['stairs','jumps','rob','decode','sequence'],
+    examples:['Climbing Stairs (LC 70)','House Robber I/II (LC 198, 213)','Min Cost Climbing Stairs (LC 746)','Decode Ways (LC 91)','Word Break (LC 139)','Maximum Sum Non-Adjacent','Delete and Earn (LC 740)'] },
+  { id:'dp-2d', x:1080, y:1600, w:180, h:64, cat:'dp', title:'2D DP',
+    sub:'dp[i][j] grid or 2 sequences',
+    when:'State depends on two indices: matrix paths, comparing two sequences/strings.',
+    complexity:['Time: O(m·n)'],
+    keywords:['grid path','two strings','lcs','edit distance'],
+    examples:['Unique Paths (LC 62, 63)','Edit Distance (LC 72)','LCS (LC 1143)','Min Path Sum (LC 64)','Interleaving String (LC 97)','Distinct Subsequences (LC 115)','Wildcard Matching (LC 44)','Regular Expression Matching (LC 10)'] },
+  { id:'dp-knap', x:1280, y:1600, w:180, h:64, cat:'dp', title:'Knapsack',
+    sub:'0/1, unbounded, multi-dim',
+    when:'Pick items with weights/values under capacity. Or count ways to make a target sum.',
+    template:'# 0/1 knapsack\nfor i in items:\n    for w in range(W, weight[i]-1, -1):  # descending\n        dp[w] = max(dp[w], dp[w-weight[i]] + value[i])',
+    complexity:['Time: O(n · W)'],
+    tips:'0/1: iterate capacity descending. Unbounded: ascending.',
+    keywords:['knapsack','subset sum','target sum','coin change'],
+    examples:['Partition Equal Subset Sum (LC 416)','Target Sum (LC 494)','Coin Change (LC 322)','Coin Change II (LC 518)','Combination Sum IV (LC 377)','Last Stone Weight II (LC 1049)','Ones and Zeroes (LC 474)'] },
+  { id:'dp-lis', x:1480, y:1600, w:180, h:64, cat:'dp', title:'LIS-style',
+    sub:'Longest increasing / chain',
+    when:'Subsequence problems with ordering constraints. O(n log n) via patience sorting / bisect.',
+    template:'# O(n log n) LIS\ntails = []\nfor x in a:\n    i = bisect_left(tails, x)\n    if i == len(tails): tails.append(x)\n    else: tails[i] = x\nreturn len(tails)',
+    complexity:['O(n²) DP or O(n log n)'],
+    keywords:['increasing','longest','envelope','chain'],
+    examples:['Longest Increasing Subsequence (LC 300)','Russian Doll Envelopes (LC 354)','Number of LIS (LC 673)','Longest Arithmetic Subsequence (LC 1027)','Maximum Length of Pair Chain (LC 646)','Box Stacking'] },
+  { id:'dp-string', x:1680, y:1600, w:180, h:64, cat:'dp', title:'String / sequence DP',
+    sub:'Edit, LCS, match',
+    when:'Transform / compare two strings; subsequence problems on a single string.',
+    complexity:['Time: O(m·n)'],
+    keywords:['edit distance','LCS','palindrome subseq','interleaving'],
+    examples:['Edit Distance (LC 72)','Longest Common Subsequence (LC 1143)','Longest Palindromic Subsequence (LC 516)','Wildcard Matching (LC 44)','Regex Matching (LC 10)','Shortest Common Supersequence (LC 1092)'] },
+  { id:'dp-interval', x:1880, y:1600, w:180, h:64, cat:'dp', title:'Interval DP',
+    sub:'dp[i][j] on ranges',
+    when:'Optimal splits over ranges; merging stones; matrix chain multiplication; burst balloons.',
+    template:'for length in range(2, n+1):\n    for i in range(n-length+1):\n        j = i + length - 1\n        for k in range(i, j):\n            dp[i][j] = best(dp[i][j], dp[i][k] + dp[k+1][j] + cost(i,k,j))',
+    complexity:['Time: O(n³)'],
+    keywords:['merge ranges','split array','burst','matrix chain'],
+    examples:['Burst Balloons (LC 312)','Matrix Chain Multiplication','Strange Printer (LC 664)','Minimum Cost to Merge Stones (LC 1000)','Stone Game I-IX','Predict the Winner (LC 486)'] },
+  { id:'dp-state-mach', x:2080, y:1600, w:180, h:64, cat:'dp', title:'State machine DP',
+    sub:'Discrete states + transitions',
+    when:'A small number of discrete states (hold, sold, rest, etc.) transition by rules.',
+    keywords:['stock','buy sell','paint','states'],
+    examples:['Best Time to Buy and Sell Stock II-VI (LC 122, 123, 188, 309, 714)','Paint House I/II (LC 256, 265)','Paint Fence (LC 276)'] },
+  { id:'dp-digit', x:2280, y:1600, w:180, h:64, cat:'dp', title:'Digit DP',
+    sub:'Count numbers ≤ N',
+    when:'Count numbers up to N with a digit property. State: (pos, tight, lead_zero, extra).',
+    template:'@cache\ndef dp(pos, tight, lead, extra):\n    if pos == len(s): return 1 if not lead else 0\n    upper = int(s[pos]) if tight else 9\n    total = 0\n    for d in range(0, upper+1):\n        total += dp(pos+1, tight and d==upper, lead and d==0, update(extra, d))\n    return total',
+    complexity:['Time: O(d · states · 10)'],
+    keywords:['count numbers','digit constraint','at most n'],
+    examples:['Numbers At Most N Given Digit Set (LC 902)','Count Special Integers (LC 2376)','Numbers Without Repeated Digits (LC 357)','Stepping Numbers (LC 1215)'] },
+  { id:'dp-tree', x:2480, y:1600, w:180, h:64, cat:'dp', title:'Tree DP',
+    sub:'Postorder aggregation',
+    when:"Optimization over subtrees. Each node returns a tuple; parent combines.",
+    examples:['House Robber III (LC 337)','Binary Tree Max Path Sum (LC 124)','Sum of Distances in Tree (LC 834)','Longest Path with Different Adjacent (LC 2246)'] },
+  { id:'dp-prob', x:2680, y:1600, w:180, h:64, cat:'dp', title:'Probability DP',
+    sub:'Expected value / probability',
+    when:'Compute probability or expected value of states.',
+    examples:['Knight Probability in Chessboard (LC 688)','New 21 Game (LC 837)','Soup Servings (LC 808)'] },
+  { id:'dp-prefix', x:2880, y:1600, w:180, h:64, cat:'dp', title:'DP + prefix/hash',
+    sub:'Count subarrays / partitions',
+    when:'DP combined with prefix sums or a hashmap for fast lookups of "how many states like this so far?"',
+    examples:['Subarray Sum Equals K (LC 560)','Continuous Subarray Sum (LC 523)','Count Beautiful Subarrays (LC 2588)'] },
+
+  /* ============================================================
+     ADVANCED / specialized (bottom, y ≈ 1850+)
+     ============================================================ */
+  { id:'a-sqrt', x:880, y:1850, w:200, h:64, cat:'algo', title:"Sqrt decomposition",
+    sub:'Block size √n',
+    when:'Range queries with both updates and queries when segment-tree feels heavy. Mo\'s algorithm for offline range queries.',
+    complexity:['Per op: O(√n)'],
+    keywords:["mo's algorithm",'offline queries','block decomposition'] },
+  { id:'a-hld', x:1100, y:1850, w:200, h:64, cat:'algo', title:'Heavy-light decomposition',
+    sub:'Path queries on a tree',
+    when:'Range-style queries on tree paths. Decompose the tree into heavy chains; use segment trees on chains.',
+    complexity:['Per query: O(log² n)'] },
+  { id:'a-euler', x:1320, y:1850, w:200, h:64, cat:'algo', title:'Euler tour + LCA',
+    sub:'Tree → array',
+    when:'Convert a tree to an array so subtree / path queries become range queries. LCA via sparse table.',
+    complexity:['Build: O(n log n)','Query LCA: O(1)'],
+    examples:['LCA on Tree','Subtree query problems'] },
+  { id:'a-sparse', x:1540, y:1850, w:200, h:64, cat:'algo', title:'Sparse table',
+    sub:'Idempotent range queries',
+    when:'Range min/max/gcd on a static array with O(1) queries.',
+    complexity:['Build: O(n log n)','Query: O(1)'],
+    keywords:['range min','range max','RMQ'] },
+  { id:'a-bitset', x:1760, y:1850, w:200, h:64, cat:'algo', title:'Bitset tricks',
+    sub:'~32× speedup',
+    when:'Subset sums up to large W; reachability; LCS variants. Bitset shifts compress inner loops.',
+    complexity:['Time: O(n · W / 64)'] },
+  { id:'a-twosat', x:1980, y:1850, w:200, h:64, cat:'algo', title:'2-SAT',
+    sub:'Boolean constraints',
+    when:'Each clause has ≤ 2 literals. Build implication graph, find SCCs (Tarjan).',
+    complexity:['Time: O(V + E)'] },
+  { id:'a-mst-advanced', x:2200, y:1850, w:200, h:64, cat:'algo', title:'Steiner tree, matroid',
+    sub:'Specialized MST variants',
+    when:'Minimum tree connecting a subset of terminal nodes (Steiner). Greedy on matroids.',
+    complexity:['Steiner: O(3^k · n + 2^k · n log n)'] },
+  { id:'a-convex-hull', x:2420, y:1850, w:200, h:64, cat:'algo', title:'Convex hull / sweep',
+    sub:'Computational geometry',
+    when:"Smallest convex polygon containing points. Andrew's monotone chain is simplest.",
+    complexity:['Time: O(n log n)'] },
+  { id:'a-line-sweep', x:2640, y:1850, w:200, h:64, cat:'algo', title:'Line sweep',
+    sub:'Geometric events',
+    when:'Closest pair of points, rectangle overlap, segment intersection.',
+    complexity:['Time: O(n log n)'] },
+  { id:'dp-convex-trick', x:2860, y:1850, w:220, h:64, cat:'dp', title:'Convex hull trick / divide-conquer DP',
+    sub:'DP optimization',
+    when:'DP transitions look like lines / monotone — speed up O(n²) → O(n log n) or O(n).',
+    complexity:['Often O(n log n)'] },
+];
+
+/* =====================================================================
+   EDGES — labeled for decision branches
+   ===================================================================== */
+const edges = [
+  // root
+  ['start','q-input'],
+
+  // input → main columns
+  ['q-input','q-array','array'],
+  ['q-input','q-string','string'],
+  ['q-input','q-linked','linked list'],
+  ['q-input','q-tree','tree'],
+  ['q-input','q-graph','graph'],
+  ['q-input','q-grid','grid'],
+  ['q-input','q-intervals','intervals'],
+  ['q-input','q-num','number'],
+  ['q-input','q-game','game'],
+  ['q-input','q-stream','stream'],
+  ['q-input','q-design','design'],
+  ['q-input','q-general','none/unsure'],
+
+  // array
+  ['q-array','q-array-search','yes'],
+  ['q-array','q-array-window','no'],
+  ['q-array-search','p-bsearch'],
+  ['q-array-search','p-2ptr'],
+  ['p-bsearch','p-bsearch-ans'],
+  ['q-array-window','p-window'],
+  ['q-array-window','p-prefix'],
+  ['p-prefix','p-kadane'],
+
+  // string
+  ['q-string','p-anagram','frequency'],
+  ['q-string','p-palindrome','palindrome'],
+  ['q-string','a-manacher','palindrome O(n)'],
+  ['q-string','a-kmp','pattern'],
+  ['q-string','a-rabin','rolling hash'],
+  ['q-string','ds-trie','prefix'],
+  ['q-string','ds-suffix','advanced'],
+
+  // linked list
+  ['q-linked','p-fastslow','cycle/middle'],
+  ['q-linked','p-reverse-ll','reverse'],
+  ['q-linked','p-merge-ll','merge'],
+
+  // tree
+  ['q-tree','p-bfs-tree','by level'],
+  ['q-tree','p-dfs-tree','by subtree'],
+  ['q-tree','p-tree-dp','optimization'],
+  ['q-tree','p-bst','BST'],
+  ['q-tree','ds-segtree','range query'],
+  ['q-tree','ds-bit','prefix dynamic'],
+
+  // graph
+  ['q-graph','p-bfs-graph','unweighted'],
+  ['q-graph','p-dfs-graph','connectivity'],
+  ['q-graph','a-topo','DAG'],
+  ['q-graph','a-dijkstra','weights ≥ 0'],
+  ['q-graph','a-bellman','negative ok'],
+  ['q-graph','a-spfa','0-1 edges'],
+  ['q-graph','a-floyd','all pairs'],
+  ['q-graph','a-mst','min spanning'],
+  ['q-graph','ds-union','connectivity'],
+  ['q-graph','a-tarjan','SCC'],
+  ['q-graph','a-astar','heuristic'],
+  ['q-graph','a-flow','matching'],
+  ['q-graph','a-bipartite','2-color'],
+  ['q-graph','a-eulerian','use every edge'],
+
+  // grid
+  ['q-grid','p-grid-bfs','traverse'],
+  ['q-grid','p-grid-dp','count/optimize'],
+
+  // intervals
+  ['q-intervals','p-int-sort','merge/insert'],
+  ['q-intervals','p-int-heap','scheduling'],
+  ['q-intervals','p-int-sweep','sweep line'],
+
+  // numeric
+  ['q-num','p-math'],
+  ['q-num','p-bit'],
+  ['q-num','dp-bitmask','n ≤ 20'],
+
+  // game / stream / design
+  ['q-game','p-minimax'],
+  ['q-stream','p-heap'],
+  ['q-stream','p-reservoir'],
+  ['q-design','p-design'],
+
+  // general → cross-cutting
+  ['q-general','p-greedy','min/max'],
+  ['q-general','p-backtrack','all configs'],
+  ['q-general','p-divide','split/combine'],
+  ['q-general','p-monostack','next greater'],
+  ['q-general','p-mono-deque','window optima'],
+  ['q-general','ds-hashmap','lookup/count'],
+  ['q-general','ds-stack','match/parse'],
+  ['q-general','q-dp','optimize/count'],
+
+  // dp branch
+  ['q-dp','dp-1d'],
+  ['q-dp','dp-2d'],
+  ['q-dp','dp-knap'],
+  ['q-dp','dp-lis'],
+  ['q-dp','dp-string'],
+  ['q-dp','dp-interval'],
+  ['q-dp','dp-state-mach'],
+  ['q-dp','dp-digit'],
+  ['q-dp','dp-tree'],
+  ['q-dp','dp-prob'],
+  ['q-dp','dp-prefix'],
+
+  // advanced (loose endpoints)
+  ['q-dp','dp-convex-trick','speedup'],
+  ['ds-segtree','a-sqrt','alt'],
+  ['ds-segtree','a-hld','tree path'],
+  ['p-dfs-tree','a-euler','flat array'],
+  ['p-prefix','a-sparse','static range'],
+  ['dp-knap','a-bitset','speedup'],
+  ['a-tarjan','a-twosat','application'],
+  ['a-mst','a-mst-advanced','variants'],
+  ['q-grid','a-convex-hull','geometric'],
+  ['q-intervals','a-line-sweep','geometric'],
+];
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+const canvas = document.getElementById('canvas');
+const edgesSvg = document.getElementById('edges');
+const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+
+const catLabel = {
+  terminal: 'Start / End',
+  decision: 'Decision point',
+  pattern: 'Pattern',
+  algo: 'Algorithm',
+  ds: 'Data structure',
+  dp: 'Dynamic programming'
+};
+const catColor = {
+  terminal: '#888780',
+  decision: '#f5b800',
+  pattern: '#2b7cd3',
+  algo: '#1d9e75',
+  ds: '#d97706',
+  dp: '#db2777'
+};
+
+// Render edges with optional labels
+edges.forEach(([from, to, label]) => {
+  const a = nodeMap[from], b = nodeMap[to];
+  if (!a || !b) return;
+  const ax = a.x + a.w / 2, ay = a.y + a.h;
+  const bx = b.x + b.w / 2, by = b.y;
+  // S-curve
+  const midY = (ay + by) / 2;
+  const d = `M ${ax} ${ay} C ${ax} ${midY}, ${bx} ${midY}, ${bx} ${by}`;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('class', 'edge');
+  path.dataset.from = from;
+  path.dataset.to = to;
+  edgesSvg.appendChild(path);
+
+  // edge label
+  if (label) {
+    const lx = (ax + bx) / 2;
+    const ly = midY;
+    const padding = 4;
+    const charW = 6.5;
+    const labelW = label.length * charW + padding * 2;
+    const labelH = 16;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', lx - labelW / 2);
+    rect.setAttribute('y', ly - labelH / 2);
+    rect.setAttribute('width', labelW);
+    rect.setAttribute('height', labelH);
+    rect.setAttribute('rx', 4);
+    rect.setAttribute('class', 'edge-label-bg');
+    edgesSvg.appendChild(rect);
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', lx);
+    text.setAttribute('y', ly + 4);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('class', 'edge-label');
+    text.textContent = label;
+    edgesSvg.appendChild(text);
+  }
+});
+
+// Render nodes
+nodes.forEach(n => {
+  const el = document.createElement('div');
+  el.className = `node ${n.cat}`;
+  el.style.left = n.x + 'px';
+  el.style.top = n.y + 'px';
+  el.style.width = n.w + 'px';
+  el.dataset.id = n.id;
+  el.innerHTML = `
+    <div class="node-body">
+      <div class="node-content">
+        <div class="node-title">${escapeHtml(n.title)}</div>
+        ${n.sub ? `<div class="node-sub">${escapeHtml(n.sub)}</div>` : ''}
+      </div>
+    </div>`;
+  el.addEventListener('click', e => { e.stopPropagation(); openPanel(n); });
+  canvas.appendChild(el);
+});
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* =====================================================================
+   PAN + ZOOM
+   ===================================================================== */
+const wrap = document.getElementById('canvas-wrap');
+let scale = 0.5, tx = 0, ty = 0;
+let isDragging = false, dragStart = null;
+
+function applyTransform() {
+  canvas.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  document.getElementById('zoom-ind').textContent = Math.round(scale * 100) + '%';
+  updateMinimap();
+}
+
+wrap.addEventListener('mousedown', e => {
+  if (e.target.closest('.node')) return;
+  if (e.target.closest('#minimap')) return;
+  isDragging = true;
+  dragStart = { x: e.clientX - tx, y: e.clientY - ty };
+  wrap.style.cursor = 'grabbing';
+});
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  tx = e.clientX - dragStart.x;
+  ty = e.clientY - dragStart.y;
+  applyTransform();
+});
+window.addEventListener('mouseup', () => {
+  isDragging = false;
+  wrap.style.cursor = '';
+});
+
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = wrap.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const delta = -e.deltaY * 0.001;
+  const newScale = Math.min(2.5, Math.max(0.1, scale * (1 + delta)));
+  const k = newScale / scale;
+  tx = mx - (mx - tx) * k;
+  ty = my - (my - ty) * k;
+  scale = newScale;
+  applyTransform();
+}, { passive: false });
+
+// Touch
+let touchStart = null, lastDist = null;
+wrap.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    touchStart = { x: e.touches[0].clientX - tx, y: e.touches[0].clientY - ty };
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastDist = Math.hypot(dx, dy);
+  }
+}, { passive: true });
+wrap.addEventListener('touchmove', e => {
+  if (e.touches.length === 1 && touchStart) {
+    tx = e.touches[0].clientX - touchStart.x;
+    ty = e.touches[0].clientY - touchStart.y;
+    applyTransform();
+  } else if (e.touches.length === 2 && lastDist) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
+    const newScale = Math.min(2.5, Math.max(0.1, scale * (dist / lastDist)));
+    scale = newScale;
+    lastDist = dist;
+    applyTransform();
+  }
+}, { passive: true });
+
+function fitToScreen() {
+  const xs = nodes.map(n => n.x);
+  const ys = nodes.map(n => n.y);
+  const xe = nodes.map(n => n.x + n.w);
+  const ye = nodes.map(n => n.y + 90);
+  const minX = Math.min(...xs), maxX = Math.max(...xe);
+  const minY = Math.min(...ys), maxY = Math.max(...ye);
+  const contentW = maxX - minX, contentH = maxY - minY;
+  const rect = wrap.getBoundingClientRect();
+  const padX = 60, padY = 60;
+  const sx = (rect.width - padX * 2) / contentW;
+  const sy = (rect.height - padY * 2) / contentH;
+  scale = Math.min(sx, sy, 1);
+  tx = padX - minX * scale + (rect.width - padX * 2 - contentW * scale) / 2;
+  ty = padY - minY * scale + (rect.height - padY * 2 - contentH * scale) / 2;
+  applyTransform();
+}
+function resetView() {
+  scale = 0.5;
+  const rect = wrap.getBoundingClientRect();
+  tx = rect.width / 2 - 2400 * scale;
+  ty = 60;
+  applyTransform();
+}
+document.getElementById('fit').addEventListener('click', fitToScreen);
+document.getElementById('reset').addEventListener('click', resetView);
+
+/* =====================================================================
+   MINIMAP
+   ===================================================================== */
+const minimapSvg = document.getElementById('minimap-svg');
+const minimapViewport = document.getElementById('minimap-viewport');
+nodes.forEach(n => {
+  const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  r.setAttribute('x', n.x); r.setAttribute('y', n.y);
+  r.setAttribute('width', n.w); r.setAttribute('height', 70);
+  r.setAttribute('rx', 8);
+  r.setAttribute('fill', catColor[n.cat] || '#888');
+  r.setAttribute('opacity', 0.65);
+  r.dataset.id = n.id;
+  minimapSvg.appendChild(r);
+});
+function updateMinimap() {
+  const rect = wrap.getBoundingClientRect();
+  const vx = -tx / scale;
+  const vy = -ty / scale;
+  const vw = rect.width / scale;
+  const vh = rect.height / scale;
+  const mmScale = Math.min(220 / 4800, 160 / 4400);
+  const offsetX = (220 - 4800 * mmScale) / 2;
+  const offsetY = (160 - 4400 * mmScale) / 2;
+  minimapViewport.style.left = (offsetX + vx * mmScale) + 'px';
+  minimapViewport.style.top = (offsetY + vy * mmScale) + 'px';
+  minimapViewport.style.width = (vw * mmScale) + 'px';
+  minimapViewport.style.height = (vh * mmScale) + 'px';
+}
+document.getElementById('minimap').addEventListener('click', e => {
+  const mm = e.currentTarget.getBoundingClientRect();
+  const cx = e.clientX - mm.left;
+  const cy = e.clientY - mm.top;
+  const mmScale = Math.min(220 / 4800, 160 / 4400);
+  const offsetX = (220 - 4800 * mmScale) / 2;
+  const offsetY = (160 - 4400 * mmScale) / 2;
+  const canvasX = (cx - offsetX) / mmScale;
+  const canvasY = (cy - offsetY) / mmScale;
+  const rect = wrap.getBoundingClientRect();
+  tx = rect.width / 2 - canvasX * scale;
+  ty = rect.height / 2 - canvasY * scale;
+  applyTransform();
+});
+
+/* =====================================================================
+   DETAIL PANEL
+   ===================================================================== */
+const panel = document.getElementById('panel');
+
+function setSection(id, show) {
+  document.getElementById(id).style.display = show ? '' : 'none';
+}
+
+function openPanel(n) {
+  document.getElementById('panel-title').textContent = n.title + (n.sub ? ' · ' + n.sub : '');
+  const badge = document.getElementById('panel-cat');
+  badge.textContent = catLabel[n.cat] || n.cat;
+  badge.style.background = catColor[n.cat] + '22';
+  badge.style.color = catColor[n.cat];
+
+  setSection('panel-when-section', !!n.when);
+  if (n.when) document.getElementById('panel-when').textContent = n.when;
+
+  // keywords
+  setSection('panel-keywords-section', !!(n.keywords && n.keywords.length));
+  const kw = document.getElementById('panel-keywords');
+  kw.innerHTML = (n.keywords || []).map(k => `<span class="keyword">${escapeHtml(k)}</span>`).join('');
+
+  // complexity
+  setSection('panel-complexity-section', !!(n.complexity && n.complexity.length));
+  document.getElementById('panel-complexity').innerHTML =
+    (n.complexity || []).map(c => `<span class="complexity">${escapeHtml(c)}</span>`).join('');
+
+  // template
+  setSection('panel-template-section', !!n.template);
+  if (n.template) {
+    document.getElementById('panel-template').innerHTML = `<pre style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;overflow-x:auto;line-height:1.5;">${escapeHtml(n.template)}</pre>`;
+  }
+
+  // tips
+  setSection('panel-tips-section', !!n.tips);
+  if (n.tips) document.getElementById('panel-tips').textContent = n.tips;
+
+  // examples
+  setSection('panel-examples-section', !!(n.examples && n.examples.length));
+  document.getElementById('panel-examples').innerHTML =
+    (n.examples || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
+
+  panel.classList.add('open');
+  highlightPath(n.id);
+}
+document.getElementById('panel-close').addEventListener('click', () => {
+  panel.classList.remove('open');
+  clearHighlights();
+});
+wrap.addEventListener('click', e => {
+  if (!e.target.closest('.node') && !e.target.closest('#minimap')) {
+    panel.classList.remove('open');
+    clearHighlights();
+  }
+});
+
+function highlightPath(targetId) {
+  clearHighlights();
+  const reverse = {};
+  edges.forEach(([f, t]) => { (reverse[t] = reverse[t] || []).push(f); });
+  const pathSet = new Set([targetId]);
+  let queue = [targetId];
+  while (queue.length) {
+    const next = [];
+    queue.forEach(id => {
+      (reverse[id] || []).forEach(p => {
+        if (!pathSet.has(p)) { pathSet.add(p); next.push(p); }
+      });
+    });
+    queue = next;
+  }
+  document.querySelectorAll('.node').forEach(el => {
+    if (!pathSet.has(el.dataset.id)) el.classList.add('dim');
+  });
+  const target = document.querySelector(`.node[data-id="${targetId}"]`);
+  if (target) target.classList.add('highlight');
+  document.querySelectorAll('.edge').forEach(p => {
+    if (pathSet.has(p.dataset.from) && pathSet.has(p.dataset.to)) {
+      p.setAttribute('stroke', 'var(--edge-active)');
+      p.setAttribute('stroke-width', 3);
+    } else {
+      p.setAttribute('stroke', '#dcdad2');
+      p.setAttribute('stroke-width', 1.5);
+    }
+  });
+}
+function clearHighlights() {
+  document.querySelectorAll('.node').forEach(el => {
+    el.classList.remove('dim');
+    el.classList.remove('highlight');
+  });
+  document.querySelectorAll('.edge').forEach(p => {
+    p.setAttribute('stroke', 'var(--edge)');
+    p.setAttribute('stroke-width', 2);
+  });
+}
+
+/* =====================================================================
+   SEARCH
+   ===================================================================== */
+const search = document.getElementById('search');
+search.addEventListener('input', () => {
+  const q = search.value.trim().toLowerCase();
+  if (!q) {
+    clearHighlights();
+    return;
+  }
+  let matched = [];
+  nodes.forEach(n => {
+    const hay = [n.title, n.sub, n.when, n.tips, ...(n.examples || []), ...(n.keywords || []), ...(n.complexity || [])]
+      .filter(Boolean).join(' ').toLowerCase();
+    const m = hay.includes(q);
+    const el = document.querySelector(`.node[data-id="${n.id}"]`);
+    if (!el) return;
+    if (m) {
+      el.classList.remove('dim');
+      el.classList.add('highlight');
+      matched.push(n);
+    } else {
+      el.classList.add('dim');
+      el.classList.remove('highlight');
+    }
+  });
+  const matchSet = new Set(matched.map(n => n.id));
+  document.querySelectorAll('.edge').forEach(p => {
+    if (matchSet.has(p.dataset.from) || matchSet.has(p.dataset.to)) {
+      p.setAttribute('stroke', 'var(--edge-active)');
+      p.setAttribute('stroke-width', 2.5);
+    } else {
+      p.setAttribute('stroke', '#e5e3db');
+      p.setAttribute('stroke-width', 1);
+    }
+  });
+  if (matched.length) {
+    const xs = matched.map(n => n.x);
+    const ys = matched.map(n => n.y);
+    const xe = matched.map(n => n.x + n.w);
+    const ye = matched.map(n => n.y + 70);
+    const minX = Math.min(...xs), maxX = Math.max(...xe);
+    const minY = Math.min(...ys), maxY = Math.max(...ye);
+    const rect = wrap.getBoundingClientRect();
+    const contentW = maxX - minX, contentH = maxY - minY;
+    const pad = 100;
+    const sx = (rect.width - pad * 2) / contentW;
+    const sy = (rect.height - pad * 2) / contentH;
+    scale = Math.min(sx, sy, 1.0);
+    tx = pad - minX * scale + (rect.width - pad * 2 - contentW * scale) / 2;
+    ty = pad - minY * scale + (rect.height - pad * 2 - contentH * scale) / 2;
+    applyTransform();
+  }
+});
+document.getElementById('clear-search').addEventListener('click', () => {
+  search.value = '';
+  search.dispatchEvent(new Event('input'));
+});
+
+// Initial fit
+fitToScreen();
+</script>
+</body>
+</html>
