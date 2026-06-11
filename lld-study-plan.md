@@ -70,12 +70,12 @@
 
 | Day | Topic | Learn | Build |
 |-----|-------|-------|-------|
-| **D22 Mon** | Threads & Mutexes | `std::thread`, `std::mutex`, `lock_guard`, `unique_lock`, `scoped_lock` | Build a **thread-safe counter** and a **coarse-grained locked hash map** |
-| **D23 Tue** | Condition variables | Spurious wakeups, predicate waits, producer-consumer signaling | Implement a **Bounded Blocking Queue** — blocks on full/empty |
-| **D24 Wed** | Semaphore & Barrier | Counting semaphore, latch, barrier — all from primitives | Implement `Semaphore` and `Barrier` using `mutex` + `condition_variable` |
-| **D25 Thu** | Reader-writer lock | Shared vs exclusive, starvation scenarios, read-preferring vs write-preferring | Implement `ReadWriteLock` from scratch, test with concurrent readers + writers |
-| **D26 Fri** | Deadlocks & debugging | Lock ordering, lock hierarchy, detecting with TSan, `std::lock` | Write an intentional deadlock, detect with `-fsanitize=thread`, fix it |
-| **D27 Sat** | Futures & Promises | `std::future`, `std::promise`, `std::packaged_task`, `std::async` | Build an async file processor — submit file paths, get future results |
+| [**D22 Mon**](days/day22-threads-mutexes.md) | Threads & Mutexes | `std::thread`, `std::mutex`, `lock_guard`, `unique_lock`, `scoped_lock` | Build a **thread-safe counter** and a **coarse-grained locked hash map** |
+| [**D23 Tue**](days/day23-condition-variables.md) | Condition variables | Spurious wakeups, predicate waits, producer-consumer signaling | Implement a **Bounded Blocking Queue** — blocks on full/empty |
+| [**D24 Wed**](days/day24-semaphore-barrier.md) | Semaphore & Barrier | Counting semaphore, latch, barrier — all from primitives | Implement `Semaphore` and `Barrier` using `mutex` + `condition_variable` |
+| [**D25 Thu**](days/day25-reader-writer-lock.md) | Reader-writer lock | Shared vs exclusive, starvation scenarios, read-preferring vs write-preferring | Implement `ReadWriteLock` from scratch, test with concurrent readers + writers |
+| [**D26 Fri**](days/day26-deadlocks-debugging.md) | Deadlocks & debugging | Lock ordering, lock hierarchy, detecting with TSan, `std::lock` | Write an intentional deadlock, detect with `-fsanitize=thread`, fix it |
+| [**D27 Sat**](days/day27-futures-promises.md) | Futures & Promises | `std::future`, `std::promise`, `std::packaged_task`, `std::async` | Build an async file processor — submit file paths, get future results |
 | **D28 Sun** | **Weekly review** | Run all concurrency code under ThreadSanitizer | Write notes on every concurrency bug you hit this week and how you fixed it |
 
 **Key Deep-Dives:**
@@ -93,12 +93,12 @@
 
 | Day | Topic | Learn | Build |
 |-----|-------|-------|-------|
-| **D29 Mon** | Thread pool design | Worker threads, task queue, graceful shutdown, `submit()` returning futures | Implement a **Thread Pool** with configurable thread count and `submit<T>(callable) → future<T>` |
-| **D30 Tue** | Thread pool refinement | Priority tasks, thread naming for debugging, exception propagation | Add **priority queue** support and **exception forwarding** to your thread pool |
-| **D31 Wed** | Atomics & memory ordering | `std::atomic`, `relaxed`, `acquire/release`, `seq_cst`, CAS loops | Implement a **lock-free stack** (Treiber stack) with `compare_exchange_weak` |
-| **D32 Thu** | Lock-free queue | SPSC ring buffer, Michael-Scott queue concepts, ABA problem | Implement a **lock-free SPSC ring buffer** (single-producer, single-consumer) |
-| **D33 Fri** | Actor model | Message-passing concurrency, one thread per actor, typed mailboxes | Implement an **Actor** class — own thread, message queue, `send(msg)`, `onReceive(handler)` |
-| **D34 Sat** | Parallel algorithms | Map-reduce pattern, parallel `for_each`, work partitioning strategies | Build a **parallel word frequency counter** — partition file into chunks, map-reduce with your thread pool |
+| [**D29 Mon**](days/day29-thread-pool.md) | Thread pool design | Worker threads, task queue, graceful shutdown, `submit()` returning futures | Implement a **Thread Pool** with configurable thread count and `submit<T>(callable) → future<T>` |
+| [**D30 Tue**](days/day30-thread-pool-refinement.md) | Thread pool refinement | Priority tasks, thread naming for debugging, exception propagation | Add **priority queue** support and **exception forwarding** to your thread pool |
+| [**D31 Wed**](days/day31-atomics-memory-ordering.md) | Atomics & memory ordering | `std::atomic`, `relaxed`, `acquire/release`, `seq_cst`, CAS loops | Implement a **lock-free stack** (Treiber stack) with `compare_exchange_weak` |
+| [**D32 Thu**](days/day32-lock-free-queue.md) | Lock-free queue | SPSC ring buffer, Michael-Scott queue concepts, ABA problem | Implement a **lock-free SPSC ring buffer** (single-producer, single-consumer) |
+| [**D33 Fri**](days/day33-actor-model.md) | Actor model | Message-passing concurrency, one thread per actor, typed mailboxes | Implement an **Actor** class — own thread, message queue, `send(msg)`, `onReceive(handler)` |
+| [**D34 Sat**](days/day34-parallel-algorithms.md) | Parallel algorithms | Map-reduce pattern, parallel `for_each`, work partitioning strategies | Build a **parallel word frequency counter** — partition file into chunks, map-reduce with your thread pool |
 | **D35 Sun** | **Weekly review** | Draw happens-before diagrams for your lock-free structures | Stress-test everything with 16+ threads, fix any races found by TSan |
 
 **Key Deep-Dives:**
@@ -112,12 +112,12 @@
 
 | Day | Topic | Learn | Build |
 |-----|-------|-------|-------|
-| **D36 Mon** | Design a Logger | Log levels, formatting, sinks (console, file), rotation | Build a **Logger** — log levels, timestamps, configurable sinks |
-| **D37 Tue** | Logger — async & thread-safe | Background flush thread, batched writes, graceful shutdown on destruction | Add **async logging** — log calls push to queue, background thread writes to sink |
-| **D38 Wed** | Design an LRU Cache | `unordered_map` + doubly-linked list, O(1) get/put, eviction | Implement **LRU Cache** with `get(key)`, `put(key, value)`, eviction callback |
-| **D39 Thu** | LRU Cache — thread-safe | Fine-grained vs coarse locking, read-heavy optimization | Make your LRU cache **thread-safe**, benchmark under concurrent access |
-| **D40 Fri** | Design a Rate Limiter | Token bucket algorithm, sliding window counter, sliding window log | Implement **Token Bucket** rate limiter — `allow()` returns true/false |
-| **D41 Sat** | Design a Timer/Scheduler | Min-heap of deadlines, one-shot vs recurring, cancel support | Implement a **Timer** — `schedule(callback, delay)`, `scheduleRepeating(cb, interval)`, `cancel(id)` |
+| [**D36 Mon**](days/day36-logger.md) | Design a Logger | Log levels, formatting, sinks (console, file), rotation | Build a **Logger** — log levels, timestamps, configurable sinks |
+| [**D37 Tue**](days/day37-logger-async.md) | Logger — async & thread-safe | Background flush thread, batched writes, graceful shutdown on destruction | Add **async logging** — log calls push to queue, background thread writes to sink |
+| [**D38 Wed**](days/day38-lru-cache.md) | Design an LRU Cache | `unordered_map` + doubly-linked list, O(1) get/put, eviction | Implement **LRU Cache** with `get(key)`, `put(key, value)`, eviction callback |
+| [**D39 Thu**](days/day39-lru-cache-threadsafe.md) | LRU Cache — thread-safe | Fine-grained vs coarse locking, read-heavy optimization | Make your LRU cache **thread-safe**, benchmark under concurrent access |
+| [**D40 Fri**](days/day40-rate-limiter.md) | Design a Rate Limiter | Token bucket algorithm, sliding window counter, sliding window log | Implement **Token Bucket** rate limiter — `allow()` returns true/false |
+| [**D41 Sat**](days/day41-timer-scheduler.md) | Design a Timer/Scheduler | Min-heap of deadlines, one-shot vs recurring, cancel support | Implement a **Timer** — `schedule(callback, delay)`, `scheduleRepeating(cb, interval)`, `cancel(id)` |
 | **D42 Sun** | **Weekly review** | For each design: draw class diagram, list 3 trade-offs, explain thread safety | Practice explaining Logger and LRU Cache designs verbally (10 min each, as if in interview) |
 
 **Key Deep-Dives:**
@@ -131,12 +131,12 @@
 
 | Day | Topic | Learn | Build |
 |-----|-------|-------|-------|
-| **D43 Mon** | Design a Connection Pool | Resource lifecycle, max connections, timeout, health checks | Implement a generic **ConnectionPool** — `acquire()` with timeout, `release()`, periodic health check |
-| **D44 Tue** | Design a KV Store | In-memory hash map, write-ahead log, crash recovery | Implement a **persistent KV store** — `get`/`put`/`delete`, WAL, `load()` on startup |
-| **D45 Wed** | Sockets & TCP basics | `socket`/`bind`/`listen`/`accept`/`connect`, blocking I/O | Build a **simple TCP echo server** — accept connections, echo back messages |
-| **D46 Thu** | Non-blocking I/O & event loop | `epoll`/`kqueue`, reactor pattern, fd multiplexing | Convert your echo server to **non-blocking** with `epoll`/`kqueue`, handle multiple clients |
-| **D47 Fri** | Serialization | Endianness, struct packing, length-prefixed framing, TLV encoding | Build a **binary message codec** — serialize/deserialize message structs over TCP |
-| **D48 Sat** | Shared memory IPC | `mmap`, `shm_open`, inter-process communication, ring buffer in shared memory | Build a **shared memory ring buffer** between two processes (producer and consumer) |
+| [**D43 Mon**](days/day43-connection-pool.md) | Design a Connection Pool | Resource lifecycle, max connections, timeout, health checks | Implement a generic **ConnectionPool** — `acquire()` with timeout, `release()`, periodic health check |
+| [**D44 Tue**](days/day44-kv-store.md) | Design a KV Store | In-memory hash map, write-ahead log, crash recovery | Implement a **persistent KV store** — `get`/`put`/`delete`, WAL, `load()` on startup |
+| [**D45 Wed**](days/day45-sockets-tcp.md) | Sockets & TCP basics | `socket`/`bind`/`listen`/`accept`/`connect`, blocking I/O | Build a **simple TCP echo server** — accept connections, echo back messages |
+| [**D46 Thu**](days/day46-nonblocking-io-event-loop.md) | Non-blocking I/O & event loop | `epoll`/`kqueue`, reactor pattern, fd multiplexing | Convert your echo server to **non-blocking** with `epoll`/`kqueue`, handle multiple clients |
+| [**D47 Fri**](days/day47-serialization.md) | Serialization | Endianness, struct packing, length-prefixed framing, TLV encoding | Build a **binary message codec** — serialize/deserialize message structs over TCP |
+| [**D48 Sat**](days/day48-shared-memory-ipc.md) | Shared memory IPC | `mmap`, `shm_open`, inter-process communication, ring buffer in shared memory | Build a **shared memory ring buffer** between two processes (producer and consumer) |
 | **D49 Sun** | **Weekly review** | Review all system designs end-to-end | **Mini-project**: Connect KV store + logger + connection pool into a **mock database service** |
 
 **Key Deep-Dives:**
@@ -150,12 +150,12 @@
 
 | Day | Topic | Learn | Build |
 |-----|-------|-------|-------|
-| **D50 Mon** | CRTP | Static polymorphism, mixin classes, avoiding vtable overhead | Implement a **CRTP-based logging mixin** and a **static interface** pattern |
-| **D51 Tue** | Type erasure | How `std::function` works internally, small-buffer optimization (SBO) | Implement `Function<R(Args...)>` from scratch with SBO |
-| **D52 Wed** | Policy-based design & Concepts | Compile-time strategy via templates, C++20 concepts for constraints | Build a **policy-based smart pointer** — configurable ownership policy, threading policy |
-| **D53 Thu** | **Mock interview #1** | Timed: 15 min design on paper → 45 min implement | Pick 2: Thread Pool, LRU Cache, Logger — no references allowed |
-| **D54 Fri** | **Mock interview #2** | Focus on articulating trade-offs out loud while coding | Pick 2: Rate Limiter, SharedPtr, Timer — explain decisions as you code |
-| **D55 Sat** | **Mock interview #3** | Full simulation: interviewer asks follow-ups, you adapt the design | Pick 2: KV Store, Memory Allocator, Connection Pool — handle "what if" questions |
+| [**D50 Mon**](days/day50-crtp.md) | CRTP | Static polymorphism, mixin classes, avoiding vtable overhead | Implement a **CRTP-based logging mixin** and a **static interface** pattern |
+| [**D51 Tue**](days/day51-type-erasure.md) | Type erasure | How `std::function` works internally, small-buffer optimization (SBO) | Implement `Function<R(Args...)>` from scratch with SBO |
+| [**D52 Wed**](days/day52-policy-based-design-concepts.md) | Policy-based design & Concepts | Compile-time strategy via templates, C++20 concepts for constraints | Build a **policy-based smart pointer** — configurable ownership policy, threading policy |
+| [**D53 Thu**](days/day53-mock-interview-1.md) | **Mock interview #1** | Timed: 15 min design on paper → 45 min implement | Pick 2: Thread Pool, LRU Cache, Logger — no references allowed |
+| [**D54 Fri**](days/day54-mock-interview-2.md) | **Mock interview #2** | Focus on articulating trade-offs out loud while coding | Pick 2: Rate Limiter, SharedPtr, Timer — explain decisions as you code |
+| [**D55 Sat**](days/day55-mock-interview-3.md) | **Mock interview #3** | Full simulation: interviewer asks follow-ups, you adapt the design | Pick 2: KV Store, Memory Allocator, Connection Pool — handle "what if" questions |
 | **D56 Sun** | **Final review & cheat sheet** | Create a 3-4 page reference sheet covering every design | Rate yourself 1-5 on each topic, re-study anything below 4 |
 
 **Key Deep-Dives:**
